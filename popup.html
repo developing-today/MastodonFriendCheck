@@ -1,0 +1,46 @@
+<!doctype html>
+<!--
+ This page is shown when the extension button is clicked, because the
+ "browser_action" field in manifest.json contains the "default_popup" key with
+ value "popup.html".
+ -->
+<html>
+  <head>
+      <!--
+      - JavaScript and HTML must be in separate files: see our Content Security
+      - Policy documentation[1] for details and explanation.
+      -
+      - [1]: https://developer.chrome.com/extensions/contentSecurityPolicy
+     -->
+    <title>Mastodon Friend Checker</title>  
+    <style>
+      body {
+      	text-align: center;
+        font-family: "Segoe UI", "Lucida Grande", Tahoma, sans-serif;
+        font-size: 100%;
+      }
+      #status {
+        /* avoid an excessively wide status text */
+        white-space: pre;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        max-width: 400px;
+      }
+      #userIdLabel {
+      	text-decoration: underline;
+      }
+    </style>
+
+  </head>
+  <body>
+    <h1>Mastodon Friend Checker</h1>
+    <p> HELLO THERE FRIEND.</p>
+    <p> PLEASE ENTER YOUR </p>
+    <p> ACCOUNT, SO THAT IT </p>
+    <p>\/ DISPLAYS BELOW:</p>
+    <p id="userIdLabel">@drewry@social.tchncs.de</p>
+    <input type="text" name="textbox" id="userIdTextBox" />
+    <input type="submit" name="button" id="submitButton" value="Refresh!" />
+  </body>
+  <script src="popup.js"></script>
+</html>
