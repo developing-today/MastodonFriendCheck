@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", function()
 
 	chrome.storage.sync.get('FullyDesignatedAddress', function(result)
 	{
-    	if (result.FullyDesignatedAddress != "null")
+    	if (result.FullyDesignatedAddress)
     	{
     		name = result.FullyDesignatedAddress;
     		document.getElementById("userIdLabel").innerHTML = result.FullyDesignatedAddress ;
@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", function()
 			{
 				var xmlHttp = new XMLHttpRequest();
 
-				xmlHttp.open('GET', inputUrl);
+				xmlHttp.open("GET", inputUrl);
 
 				xmlHttp.onreadystatechange = function()
 				{
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", function()
 						{
 							handle.push(String(re.exec(xml.getElementsByClassName("name")[i].childNodes[1].text)));
 
-							if (handle[handle.length - 1] == 'null')
+							if (handle[handle.length - 1] == "null")
 							{
 								handle[handle.length - 1] = String(reLocal.exec(xml.getElementsByClassName("name")[i].childNodes[1].text));
 							}
@@ -78,15 +78,15 @@ document.addEventListener("DOMContentLoaded", function()
 								followingList.push(domain  + "/@"  + inputParts[inputParts.length - 1]);
 							}
 						}
-						if (xml.getElementsByClassName("next_page disabled").length == 0)
+						if (xml.getElementsByClassName("next_page disabled").length == 0 && xml.getElementsByClassName("next_page").length != 0)
 						{
 							var nextPageUrl = domain + xml.getElementsByClassName("next_page")[0].getAttribute("href");
-							if (nextPageUrl != 'null' && nextPageUrl != 'undefined') recursiveAddAllFollowing(nextPageUrl);
+							if (nextPageUrl != "null" && nextPageUrl != "undefined") recursiveAddAllFollowing(nextPageUrl);
 						}
 						else
 						{			
-							setChromeStorage("FollowingList", followingList);
-							setChromeStorage("FullyDesignatedAddress", input);
+							setChromeStorage('FollowingList', followingList);
+							setChromeStorage('FullyDesignatedAddress', input);
 							document.getElementById("userIdLabel").innerHTML= input;
 							document.getElementById("userIdTextBox").value="Thanks!";
 							alert("Congratulations on having " + followingList.length + " people you follow!");	

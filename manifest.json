@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "Mastodon Friend Checker",
-  "description": "This extension shows a check mark if you've already friended a remote Mastadon user.",
-  "version": "0.0.1",
+  "description": "This extension shows a \"Following\" if you've already friended a remote Mastadon web profile.",
+  "version": "0.0.5",
   "browser_action": {
     "default_icon": "icon.png",
     "default_popup": "popup.html"
@@ -12,7 +12,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*/*"],
+      "matches": ["https://*/@*"],
       "js": ["content.js"],
       "run_at": "document_end"
     }
@@ -21,5 +21,7 @@
     "activeTab",
     "https://*/",
     "storage"
-  ]
+  ],
+  "icons": { "16": "icon16.png",
+            "128": "icon128.png" }
 }

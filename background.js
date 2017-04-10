@@ -1,6 +1,6 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
 
-setInterval(updateFollowingList, 30 * 60 * 1000);
+setInterval(updateFollowingList, 15 * 60 * 1000);
 
 function updateFollowingList()
 {
@@ -60,7 +60,7 @@ function updateFollowingList()
 							followingList.push(domain  + "/@"  + inputParts[inputParts.length - 1]);
 						}
 					}
-					if (xml.getElementsByClassName("next_page disabled").length == 0)
+					if (xml.getElementsByClassName("next_page disabled").length == 0 && xml.getElementsByClassName("next_page").length != 0)
 					{
 						var nextPageUrl = domain + xml.getElementsByClassName("next_page")[0].getAttribute("href");
 						if (nextPageUrl != 'null' && nextPageUrl != 'undefined') recursiveAddAllFollowing(nextPageUrl);
