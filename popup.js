@@ -1,5 +1,9 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
 
+//TODO:
+//Pull from follows.csv and parse that into array to send to chromelocalstore
+//https://social.tchncs.de/settings/exports/follows.csv
+
 document.addEventListener("DOMContentLoaded", function()
 {
 	var submitButtonElement = document.getElementById("submitButton");
@@ -78,10 +82,10 @@ document.addEventListener("DOMContentLoaded", function()
 								followingList.push(domain  + "/@"  + inputParts[inputParts.length - 1]);
 							}
 						}
-						if (xml.getElementsByClassName("next_page disabled").length == 0 && xml.getElementsByClassName("next_page").length != 0)
+						if (xml.getElementsByClassName("next").length != 0)
 						{
-							var nextPageUrl = domain + xml.getElementsByClassName("next_page")[0].getAttribute("href");
-							if (nextPageUrl != "null" && nextPageUrl != "undefined") recursiveAddAllFollowing(nextPageUrl);
+							var localPath = xml.getElementsByClassName("next")[0].getElementsByTagName("a")[0].getAttribute("href")
+							if (localPath != null && localPath != undefined) recursiveAddAllFollowing(domain + localPath);
 						}
 						else
 						{			
