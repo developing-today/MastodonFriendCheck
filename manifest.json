@@ -3,8 +3,8 @@
 
   "manifest_version": 2,
   "name": "Mastodon Friend Checker",
-  "description": "This extension shows \"Following\" if you've already friended a remote Mastodon web profile.",
-  "version": "0.0.7",
+  "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
+  "version": "0.1.0",
   "browser_action": {
     "default_icon": "icon.png",
     "default_popup": "popup.html"

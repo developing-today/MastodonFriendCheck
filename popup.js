@@ -1,46 +1,67 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
+document.onkeypress = keyPress;
+
+function keyPress(e){
+	var x = e || window.event;
+	var key = (x.keyCode || x.which);
+	if(key == 13 || key == 3){
+		document.getElementById("submitButton").click();
+	}
+}
 
 document.addEventListener("DOMContentLoaded", function() {
 	var submitButtonElement = document.getElementById("submitButton");
 
-	chrome.storage.sync.get('FullyDesignatedAddress', function(result) {
-  	if (result.FullyDesignatedAddress) {
-  		name = result.FullyDesignatedAddress;
-  		document.getElementById("userIdLabel").innerHTML = result.FullyDesignatedAddress;
-  	}
+	chrome.storage.sync.get(['FollowingList', 'FullyDesignatedAddress'], function(result) {
+		if (result.FullyDesignatedAddress) {
+			if (result.FullyDesignatedAddress != "@drewry@social.tchncs.de") {
+				var userLabel = result.FullyDesignatedAddress
 
-		if (document.getElementById("userIdLabel").innerHTML != "@drewry@social.tchncs.de") {
-			document.getElementById("userIdTextBox").value = document.getElementById("userIdLabel").innerHTML;
-		}
+				document.getElementById("userIdTextBox").value = userLabel
+
+				if (result.FollowingList) {
+					if (result.FollowingList.length > 0) {
+						userLabel = userLabel + "\n(" + result.FollowingList.length + ")";
+					}
+				}
+				document.getElementById("userIdLabel").innerHTML = userLabel;
+			}
+	  	}
 	});
 
 	if (submitButtonElement) {
 		submitButtonElement.addEventListener("click", function() {
-			var input = document.getElementById("userIdTextBox").value;
-			var parts = input.split("@");
-			var name = parts[parts.length - 2];
-			var domain = "https://" + parts[parts.length - 1];
-			var url = domain + "/settings/exports/follows.csv";
-			var xmlHttp = new XMLHttpRequest();
-			var followingList = [];
-			
-			xmlHttp.onreadystatechange = function() {
-				if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
-					if (xmlHttp.responseText == "") {
-						throw new Error("Empty response.");
-						alert("Empty XML");
-					} else {
-						followingList = xmlHttp.responseText.split("\n")
-						setChromeStorage('FollowingList', followingList);
-						setChromeStorage('FullyDesignatedAddress', input);
-						document.getElementById("userIdLabel").innerHTML= input;
-						document.getElementById("userIdTextBox").value="Thanks!";
-						alert("Congratulations on having " + followingList.length + " people you follow!");	
+			var input = document.getElementById("userIdTextBox").value.trim();
+			if (input != "Thanks!" && input != "") {
+				var parts = input.split("@");
+				var url = "https://" + parts[parts.length - 1] + "/settings/exports/follows.csv";
+				var xmlHttp = new XMLHttpRequest();
+				
+				xmlHttp.onreadystatechange = function() {
+					if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
+						if (xmlHttp.responseText == "") {
+							alert("Error: Empty CSV");
+						} else {
+							var followingList = xmlHttp.responseText.split("\n")
+							followingList.pop()
+
+							setChromeStorage('FollowingList', followingList);
+							setChromeStorage('FullyDesignatedAddress', input);
+
+							document.getElementById("userIdLabel").innerHTML= input + "\n(" + followingList.length + ")";
+							document.getElementById("userIdTextBox").value="Thanks!";
+						}
+					} else if (xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 401) {
+						document.getElementById("userIdLabel").innerHTML= "Could not access followers. Are you logged in?";
+					} else if (xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 404) {
+						document.getElementById("userIdLabel").innerHTML= "Error 404. Did you enter the correct instance domain?";
+					} else if (xmlHttp.readyState === XMLHttpRequest.DONE) {
+						document.getElementById("userIdLabel").innerHTML= "Unresolved Error. Did you enter the correct information?";
 					}
-				}
-			};
-			xmlHttp.open("GET", url);
-			xmlHttp.send();
+				};
+				xmlHttp.open("GET", url);
+				xmlHttp.send();
+			}
 		});
 	}
 });
