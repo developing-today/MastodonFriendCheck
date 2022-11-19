@@ -1,17 +1,27 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
 
-var currentUrl = window.location.href;
+var currentURL = new URL(window.location.href);
+var followButton;
 
-chrome.storage.sync.get('FollowingList', function (result) {
-	if (result.FollowingList != "null") {
-		result.FollowingList.forEach(function(element) {
-			var parts = element.split("@");
-			var name = parts[parts.length - 2];
-			var domain = parts[parts.length - 1];
 
-			if (currentUrl.includes(domain) && (currentUrl.includes("@" + name) || currentUrl.includes("users/" + name + "/"))) {
-				document.querySelector('.logo-button').textContent = "Following";
-			}
-		});
+function fixFollowButton() {
+	chrome.storage.sync.get('FollowingList', function (result) {
+		if (result.FollowingList) {
+			result.FollowingList.forEach(function(element) {
+				let [name, domain] = element.split(",")[0].split("@");
+
+				if (currentURL.host === domain && currentURL.pathname.startsWith(`/@${name}`)) {
+					followButton.textContent = "Following";
+				}
+			});
+		}
+	});
+}
+
+var buttonCheckInterval = setInterval(function() {
+	followButton = document.querySelector('.logo-button');
+	if (followButton) {
+		clearInterval(buttonCheckInterval);
+		fixFollowButton();
 	}
-});
+}, 50);
