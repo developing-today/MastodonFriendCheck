@@ -18,9 +18,9 @@ function fixFollowButton() {
 	});
 	chrome.storage.sync.get('FullyDesignatedAddress', function(result) {
 		let parts = result.FullyDesignatedAddress.split("@");
-		let domain = parts[parts.length - 1];
+		let myDomain = parts[parts.length - 1];
 		let user = currentURL.pathname.match(/\/@(\w+)/)[1];
-		let url = `https://${domain}/@${user}@${currentURL.host}`;
+		let url = `https://${myDomain}/authorize_interaction?uri=${currentURL}`;
 		followButton.addEventListener("click", function (event) {
 			window.location.href = url;
 			event.preventDefault();
