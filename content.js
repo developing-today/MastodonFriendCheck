@@ -1,7 +1,7 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
 
-var currentURL = new URL(window.location.href);
-var followButton;
+let currentURL = new URL(window.location.href);
+let followButton;
 
 
 function fixFollowButton() {
@@ -29,10 +29,12 @@ function fixFollowButton() {
 	});
 }
 
-var buttonCheckInterval = setInterval(function() {
-	followButton = document.querySelector('.logo-button');
-	if (followButton) {
-		clearInterval(buttonCheckInterval);
-		fixFollowButton();
-	}
-}, 50);
+if (currentURL.pathname.startsWith("/@") && document.querySelector("#mastodon")) {
+	let buttonCheckInterval = setInterval(function() {
+		followButton = document.querySelector('.logo-button');
+		if (followButton) {
+			clearInterval(buttonCheckInterval);
+			fixFollowButton();
+		}
+	}, 50);
+}
