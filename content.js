@@ -10,7 +10,7 @@ chrome.storage.sync.get('FollowingList', function (result) {
 			var domain = parts[parts.length - 1];
 
 			if (currentUrl.includes(domain) && (currentUrl.includes("@" + name) || currentUrl.includes("users/" + name + "/"))) {
-				document.getElementsByClassName('button')[0].childNodes[0].nodeValue = "Following";
+				document.querySelector('.logo-button').textContent = "Following";
 			}
 		});
 	}
