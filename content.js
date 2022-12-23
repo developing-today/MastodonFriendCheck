@@ -15,3 +15,5 @@ chrome.storage.sync.get('FollowingList', function (result) {
 		});
 	}
 });
+
+//TODO: probably needs scripting permissions wildcard or something
