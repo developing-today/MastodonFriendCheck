@@ -7,7 +7,7 @@ function updateFollowingList() {
 		var parts = result.FullyDesignatedAddress.split("@");
 		var url = "https://" + parts[parts.length - 1] + "/settings/exports/follows.csv";
 		var xmlHttp = new XMLHttpRequest();
-		
+
 		xmlHttp.onreadystatechange = function() {
 			if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
 				if (xmlHttp.responseText == "") {
