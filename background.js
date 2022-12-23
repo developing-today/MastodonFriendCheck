@@ -1,29 +1,33 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
+// import './lib.js'
 
-setInterval(updateFollowingList, 5 * 60 * 1000);
+// import { updateFollowingList } from './lib.js';
+// redo import with global alias
+import * as lib from './lib.js';
 
-function updateFollowingList() {
-	chrome.storage.sync.get('FullyDesignatedAddress', function(result) {
-		var parts = result.FullyDesignatedAddress.split("@");
-		var url = "https://" + parts[parts.length - 1] + "/settings/exports/follows.csv";
-		var xmlHttp = new XMLHttpRequest();
+const storageCache = { count: 0 };
 
-		xmlHttp.onreadystatechange = function() {
-			if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
-				if (xmlHttp.responseText == "") {
-					throw new Error("Empty response.");
-				} else {
-					setChromeStorage('FollowingList', (xmlHttp.responseText.split("\n").pop()));
-				}
-			}
-		};
-		xmlHttp.open("GET", url);
-		xmlHttp.send();
-	});
-}
+const initStorageCache = chrome.storage.sync.get().then((items) => {
+	Object.assign(storageCache, items);
+});
 
-function setChromeStorage(name, value) {
-	var dataObj = {};
-	dataObj[name] = value;
-	chrome.storage.sync.set(dataObj, function() {});
-}
+setInterval(lib.updateFollowingList, 5 * 60 * 1000);
+
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
+    console.log(
+      `Storage key "${key}" in namespace "${namespace}" changed.`,
+      `Old value was "${oldValue}", new value is "${newValue}".`
+    );
+  }
+});
+
+chrome.action.onClicked.addListener(async (tab) => {
+  try {
+    await initStorageCache;
+  } catch (e) {
+  }
+  storageCache.count++;
+  storageCache.lastTabId = tab.id;
+  chrome.storage.sync.set(storageCache);
+});

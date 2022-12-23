@@ -1,7 +1,9 @@
 // Copyright (c) 2017 Drewry Pope. All rights reserved.
+import './lib.js';
 
 var currentUrl = window.location.href;
 
+// TODO: use lib
 chrome.storage.sync.get('FollowingList', function (result) {
 	if (result.FollowingList != "null") {
 		result.FollowingList.forEach(function(element) {
