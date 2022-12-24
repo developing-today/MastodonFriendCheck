@@ -134,26 +134,6 @@ export function keyPress(e){
 	}
 }
 
-// chrome.action.onClicked.addListener((tab) => {
-//   if(!tab.url.includes("chrome://")) {
-//     // chrome.scripting.executeScript({
-//     //   target: { tabId: tab.id },
-//     //   function: reddenPage
-//     // });
-//     var copy = document
-//         .querySelector(".copypaste > input");
-//     var x = copy ? copy.value : window.location.href;
-//     var y = cleanDomain(x).split('/');
-//
-// 		if (y.length < 3) {
-// 			window.location.href = [await activeDomain(), y[1], "@", y[0], z].join("");
-//     } else {
-// 			await search(x);
-// 			// TODO:
-//     }
-//   }
-// });
-
 export function updateFollowingList() {
 	chrome.storage.sync.get('FullyDesignatedAddress', function(result) {
 		var parts = result.FullyDesignatedAddress.split("@");
@@ -172,6 +152,108 @@ export function updateFollowingList() {
 		xmlHttp.open("GET", url);
 		xmlHttp.send();
 	});
+}
+
+export function initStorageCache(storageCache) {
+	chrome.storage.sync.get().then((items) => {
+		Object.assign(storageCache, items);
+	});
+}
+
+export function onStorageChange(changes, namespace) {
+  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
+    console.log(
+      `Storage key "${key}" in namespace "${namespace}" changed.`,
+      `Old value was "${oldValue}", new value is "${newValue}".`
+    );
+  }
+}
+
+export async function onClickInitStorage(tab, storageCache) {
+  try {
+    await initStorageCache(storageCache);
+  } catch (e) {
+  }
+  storageCache.count++;
+  storageCache.lastTabId = tab.id;
+  chrome.storage.sync.set(storageCache);
+}
+
+export async function checkPageAgainstFollowingList() {
+	var currentUrl = window.location.href;
+	await getChromeStorage('FollowingList').then((result) => {
+		if (result.FollowingList) {
+			result.FollowingList.forEach(function(element) {
+				var parts = element.split("@");
+				var name = parts[parts.length - 2];
+				var domain = parts[parts.length - 1];
+
+				if (currentUrl.includes(domain) && (currentUrl.includes("@" + name) || currentUrl.includes("users/" + name + "/"))) {
+					document.getElementsByClassName('button')[0].childNodes[0].nodeValue = "Following";
+				}
+			});
+		}
+	});
+}
+
+export async function onPopupLoad() {
+	document.onkeypress = keyPress;
+	var submitButtonElement = document.getElementById("submitButton");
+
+	await getChromeStorage(['FollowingList', 'FullyDesignatedAddress'])
+	.then(result => {
+		console.log(result);
+		if (result.FullyDesignatedAddress) {
+			if (result.FullyDesignatedAddress != "@drewry@social.tchncs.de") {
+				var userLabel = result.FullyDesignatedAddress
+				document.getElementById("userIdTextBox").value = userLabel
+
+				if (result.FollowingList) {
+					if (result.FollowingList.length > 0) {
+						userLabel = userLabel + "\n(" + result.FollowingList.length + ")";
+					}
+				}
+				document.getElementById("userIdLabel").innerHTML = userLabel;
+			}
+		}
+	});
+
+	if (submitButtonElement) {
+		submitButtonElement.addEventListener("click", () => {
+			var input = document.getElementById("userIdTextBox").value.trim();
+			if (input != "Thanks!" && input != "") {
+				setChromeStorage('FullyDesignatedAddress', input);
+				var parts = input.split("@");
+				var url = makeHttps(parts[parts.length - 1]) + "/api/v1/accounts/1/following";
+				var response = fetch(url, { method: 'GET' })
+						.then(response => response.json())
+						.then(data => {
+							if (data == "") {
+								alert("Error: Empty CSV");
+							} else {
+								var followingList = data.split("\n")
+								followingList.pop()
+
+								setChromeStorage('FollowingList', followingList);
+								setChromeStorage('FullyDesignatedAddress', input);
+
+								document.getElementById("userIdLabel").innerHTML= input + "\n(" + followingList.length + ")";
+								document.getElementById("userIdTextBox").value="Thanks!";
+							}
+						})
+						.catch(error => {
+							console.log(error);
+							if (error.status === 401) {
+								document.getElementById("userIdLabel").innerHTML= "Could not access followers. Are you logged in?";
+							} else if (error.status === 404) {
+								document.getElementById("userIdLabel").innerHTML= "Error 404. Did you enter the correct instance domain?";
+							} else {
+								document.getElementById("userIdLabel").innerHTML= "Unresolved Error. Did you enter the correct information?";
+							}
+						});
+			}
+		});
+	}
 }
 
 // async function requestPermissions() {
@@ -238,4 +320,24 @@ export function updateFollowingList() {
 //       doSomethingElse();
 //     }
 //   });
+// });
+
+// chrome.action.onClicked.addListener((tab) => {
+//   if(!tab.url.includes("chrome://")) {
+//     // chrome.scripting.executeScript({
+//     //   target: { tabId: tab.id },
+//     //   function: reddenPage
+//     // });
+//     var copy = document
+//         .querySelector(".copypaste > input");
+//     var x = copy ? copy.value : window.location.href;
+//     var y = cleanDomain(x).split('/');
+//
+// 		if (y.length < 3) {
+// 			window.location.href = [await activeDomain(), y[1], "@", y[0], z].join("");
+//     } else {
+// 			await search(x);
+// 			// TODO:
+//     }
+//   }
 // });

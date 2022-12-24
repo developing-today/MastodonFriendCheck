@@ -8,13 +8,8 @@
     "default_icon": "icon.png",
     "default_popup": "popup.html"
   },
-  "permissions": [
-    "activeTab",
-    "storage"
-  ],
-  "optional_host_permissions": [
-    "https://*/*"
-  ],
+  "permissions": ["activeTab", "storage"],
+  "optional_host_permissions": ["https://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

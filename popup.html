@@ -4,14 +4,16 @@
  "browser_action" field in manifest.json contains the "default_popup" key with
  value "popup.html".
  -->
-<html>
+<html lang="en">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <head>
-      <!--
+    <!--
       - JavaScript and HTML must be in separate files: see our Content Security
       - Policy documentation[1] for details and explanation.
       -
       - [1]: https://developer.chrome.com/extensions/contentSecurityPolicy
-     -->
+    -->
+    <script type="module" src="./popup.js"></script>
     <title>Mastodon Friend Checker</title>
     <style>
       body {
@@ -35,10 +37,9 @@
     <h1>Mastodon Friend Checker</h1>
     <p> HELLO FRIEND! </p>
     <p> PLEASE ENTER YOUR </p>
-    <p> HANDLE OR INSTANCE NAME</p>
+    <label for="userIdTextBox">HANDLE OR INSTANCE</label>
     <p id="userIdLabel">@drewry@social.tchncs.de</p>
     <input type="text" name="textbox" id="userIdTextBox" />
     <input type="submit" type="button" name="button" id="submitButton" value="Refresh!" />
   </body>
-  <script src="popup.js"></script>
 </html>
