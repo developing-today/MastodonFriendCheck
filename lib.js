@@ -1,3 +1,62 @@
+export function stripHandle(handle) {
+  if (handle.toString().includes('@')) {
+    const handleSplit = handle.split('@');
+    return handleSplit[handleSplit.length - 1];
+  } else {
+    return handle;
+  }
+}
+
+export function cleanDomain(domain) {
+	let cleanDomain = stripHandle(domain).replace("https://", "").replace("http://", "");
+  if (cleanDomain.includes('/')) {
+    return cleanDomain.split('/')[0];
+  } else {
+    return cleanDomain;
+  }
+}
+
+export function makeHttps(url) {
+	return "https://" + cleanDomain(url);
+}
+
+export function keyPress(e){
+	var x = e || window.event;
+	var key = (x.keyCode || x.which);
+	if(key == 13 || key == 3){
+		document.getElementById("submitButton").click();
+	}
+}
+
+export function updateFollowingList() {
+	chrome.storage.sync.get('Instance', function(result) {
+		var parts = result.Instance.split("@");
+		var url = "https://" + parts[parts.length - 1] + "/settings/exports/follows.csv";
+		var xmlHttp = new XMLHttpRequest();
+
+		xmlHttp.onreadystatechange = function() {
+			if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
+				if (xmlHttp.responseText == "") {
+					throw new Error("Empty response.");
+				} else {
+					setChromeStorage('FollowingList', (xmlHttp.responseText.split("\n").pop()));
+				}
+			}
+		};
+		xmlHttp.open("GET", url);
+		xmlHttp.send();
+	});
+}
+
+export function onStorageChange(changes, namespace) {
+  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
+    console.log(
+      `Storage key "${key}" in namespace "${namespace}" changed.`,
+      `Old value was "${oldValue}", new value is "${newValue}".`
+    );
+  }
+}
+
 export async function setChromeStorageWithDict(dict) {
 	return new Promise((resolve, reject) => {
 		try {
@@ -12,7 +71,7 @@ export async function setChromeStorage(name, value) {
 	return new Promise((resolve, reject) => {
 		var data = {};
 		data[name] = value;
-		setChromeStorageWithDict(data);
+		setChromeStorageWithDict(chrome, data);
 	});
 }
 
@@ -26,21 +85,13 @@ export async function getChromeStorage(keys) {
 	});
 }
 
-export function cleanDomain(domain) {
-	return domain.replace("https://", "").replace("http://", "");
-}
-
-export function makeHttps(url) {
-	return "https://" + cleanDomain(url);
-}
-
-export async function activeDomain(defaultDomain = "hachyderm.io") {
+export async function getInstance(defaultDomain) {
   return
 		makeHttps(
-			getChromeStorage(["ActiveDomain"])
+			getChromeStorage(["Instance"])
 				.then(result => {
-					if (result && result.ActiveDomain) {
-						return result.ActiveDomain;
+					if (result && result.Instance) {
+						return result.Instance;
 					} else {
 						return defaultDomain;
 					}
@@ -53,7 +104,7 @@ export async function activeDomain(defaultDomain = "hachyderm.io") {
 
 export async function chromePermissionsToRequest() {
   return {
-    host_permissions: [ await activeDomain() ]
+    host_permissions: [ await getInstance() ]
   };
 }
 
@@ -64,7 +115,7 @@ export async function makeApp() {
 	formData.append('scopes', 'write:follows');
 	formData.append('website', 'https://developing.today/mastodon-friend-checker');
 
-	return fetch(await activeDomain() + '/api/v1/apps', {
+	return fetch(await getInstance() + '/api/v1/apps', {
 		method: 'POST',
 		body: formData
 	})
@@ -86,7 +137,7 @@ export async function getAccessToken() {
 export async function search(query, limit=1) {
 	return fetch(
 		[
-			await activeDomain(),
+			await getInstance(),
 			"api/v2/search?q=",
 			query,
 			"&resolve=true&limit=" + limit
@@ -117,66 +168,13 @@ export async function getAccountId(username, domain) {
 }
 
 export async function getFollowingList(id) {
-	return fetch(await activeDomain() + "/api/v1/accounts/" + id + "/following", { method: "GET" })
+	return fetch(await getInstance() + "/api/v1/accounts/" + id + "/following", { method: "GET" })
 	.then(result => result.json())
   .then(result => {
     console.log(JSON.stringify(result))
   })
   .catch(function() {
   });
-}
-
-export function keyPress(e){
-	var x = e || window.event;
-	var key = (x.keyCode || x.which);
-	if(key == 13 || key == 3){
-		document.getElementById("submitButton").click();
-	}
-}
-
-export function updateFollowingList() {
-	chrome.storage.sync.get('FullyDesignatedAddress', function(result) {
-		var parts = result.FullyDesignatedAddress.split("@");
-		var url = "https://" + parts[parts.length - 1] + "/settings/exports/follows.csv";
-		var xmlHttp = new XMLHttpRequest();
-
-		xmlHttp.onreadystatechange = function() {
-			if(xmlHttp.readyState === XMLHttpRequest.DONE && xmlHttp.status === 200) {
-				if (xmlHttp.responseText == "") {
-					throw new Error("Empty response.");
-				} else {
-					setChromeStorage('FollowingList', (xmlHttp.responseText.split("\n").pop()));
-				}
-			}
-		};
-		xmlHttp.open("GET", url);
-		xmlHttp.send();
-	});
-}
-
-export function initStorageCache(storageCache) {
-	chrome.storage.sync.get().then((items) => {
-		Object.assign(storageCache, items);
-	});
-}
-
-export function onStorageChange(changes, namespace) {
-  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
-    console.log(
-      `Storage key "${key}" in namespace "${namespace}" changed.`,
-      `Old value was "${oldValue}", new value is "${newValue}".`
-    );
-  }
-}
-
-export async function onClickInitStorage(tab, storageCache) {
-  try {
-    await initStorageCache(storageCache);
-  } catch (e) {
-  }
-  storageCache.count++;
-  storageCache.lastTabId = tab.id;
-  chrome.storage.sync.set(storageCache);
 }
 
 export async function checkPageAgainstFollowingList() {
@@ -200,113 +198,77 @@ export async function onPopupLoad() {
 	document.onkeypress = keyPress;
 	var submitButtonElement = document.getElementById("submitButton");
 
-	await getChromeStorage(['FollowingList', 'FullyDesignatedAddress'])
+	await getChromeStorage(['FollowingList', 'Instance'])
 	.then(result => {
 		console.log(result);
-		if (result.FullyDesignatedAddress) {
-			if (result.FullyDesignatedAddress != "@drewry@social.tchncs.de") {
-				var userLabel = result.FullyDesignatedAddress
-				document.getElementById("userIdTextBox").value = userLabel
+		if (result.Instance) {
+			if (result.Instance != "@drewry@social.tchncs.de") {
+				var userLabel = result.Instance
+				document.getElementById("instanceTextBox").value = userLabel
 
 				if (result.FollowingList) {
 					if (result.FollowingList.length > 0) {
 						userLabel = userLabel + "\n(" + result.FollowingList.length + ")";
 					}
 				}
-				document.getElementById("userIdLabel").innerHTML = userLabel;
+				document.getElementById("instanceLabel").innerHTML = userLabel;
 			}
 		}
 	});
 
 	if (submitButtonElement) {
 		submitButtonElement.addEventListener("click", () => {
-			var input = document.getElementById("userIdTextBox").value.trim();
+			var input = document.getElementById("instanceTextBox").value.trim();
 			if (input != "Thanks!" && input != "") {
-				setChromeStorage('FullyDesignatedAddress', input);
+				setChromeStorage('Instance', input);
 				var parts = input.split("@");
 				var url = makeHttps(parts[parts.length - 1]) + "/api/v1/accounts/1/following";
 				var response = fetch(url, { method: 'GET' })
-						.then(response => response.json())
-						.then(data => {
-							if (data == "") {
-								alert("Error: Empty CSV");
-							} else {
-								var followingList = data.split("\n")
-								followingList.pop()
+					.then(response => response.json())
+					.then(data => {
+						if (data == "") {
+							alert("Error: Empty CSV");
+						} else {
+							var followingList = data.split("\n")
+							followingList.pop()
 
-								setChromeStorage('FollowingList', followingList);
-								setChromeStorage('FullyDesignatedAddress', input);
+							setChromeStorage('FollowingList', followingList);
+							setChromeStorage('Instance', input);
 
-								document.getElementById("userIdLabel").innerHTML= input + "\n(" + followingList.length + ")";
-								document.getElementById("userIdTextBox").value="Thanks!";
-							}
-						})
-						.catch(error => {
-							console.log(error);
-							if (error.status === 401) {
-								document.getElementById("userIdLabel").innerHTML= "Could not access followers. Are you logged in?";
-							} else if (error.status === 404) {
-								document.getElementById("userIdLabel").innerHTML= "Error 404. Did you enter the correct instance domain?";
-							} else {
-								document.getElementById("userIdLabel").innerHTML= "Unresolved Error. Did you enter the correct information?";
-							}
-						});
+							document.getElementById("instanceLabel").innerHTML= input + "\n(" + followingList.length + ")";
+							document.getElementById("instanceTextBox").value="Thanks!";
+						}
+					})
+					.catch(error => {
+						console.log(error);
+						if (error.status === 401) {
+							document.getElementById("instanceLabel").innerHTML= "Could not access followers. Are you logged in?";
+						} else if (error.status === 404) {
+							document.getElementById("instanceLabel").innerHTML= "Error 404. Did you enter the correct instance domain?";
+						} else {
+							document.getElementById("instanceLabel").innerHTML= "Unresolved Error. Did you enter the correct information?";
+						}
+					});
 			}
 		});
 	}
 }
 
-// async function requestPermissions() {
+// export async function requestPermissions() {
 //   function onResponse(response) {
 //     if (response) {
 //       console.log("Permission was granted");
 //     } else {
 //       console.log("Permission was refused");
 //     }
-
 //     return browser.permissions.getAll();
 //   }
-
 //   const response = await browser.permissions.request(chromePermissionsToRequest);
 //   const currentPermissions = await onResponse(response);
-
 //   console.log(`Current permissions:`, currentPermissions);
 // }
-// // Extension permissions are:
-// // "webRequest", "tabs", "*://*.mozilla.org/*"
 
-// let testPermissions1 = {
-//   origins: ["*://mozilla.org/"],
-//   permissions: ["tabs"]
-// };
-
-// const testResult1 = await browser.permissions.contains(testPermissions1);
-// console.log(testResult1); // true
-
-// chrome.permissions.contains({
-//   permissions: ['tabs'],
-//   origins: ['https://www.google.com/']
-// }, (result) => {
-//   if (result) {
-//     // The extension has the permissions.
-//   } else {
-//     // The extension doesn't have the permissions.
-//   }
-// });
-
-// chrome.permissions.remove({
-//   permissions: ['tabs'],
-//   origins: ['https://www.google.com/']
-// }, (removed) => {
-//   if (removed) {
-//     // The permissions have been removed.
-//   } else {
-//     // The permissions have not been removed (e.g., you tried to remove
-//     // required permissions).
-//   }
-// });
-
-// export async function requestPermissions (event) => {
+// export async function requestPermissions (event) {
 //   // Permissions must be requested from inside a user gesture, like a button's
 //   // click handler.
 //   chrome.permissions.request({
@@ -320,8 +282,37 @@ export async function onPopupLoad() {
 //       doSomethingElse();
 //     }
 //   });
-// });
+// }
 
+// Extension permissions are:
+// "webRequest", "tabs", "*://*.mozilla.org/*"
+// let testPermissions1 = {
+//   origins: ["*://mozilla.org/"],
+//   permissions: ["tabs"]
+// };
+// const testResult1 = await browser.permissions.contains(testPermissions1);
+// console.log(testResult1); // true
+// chrome.permissions.contains({
+//   permissions: ['tabs'],
+//   origins: ['https://www.google.com/']
+// }, (result) => {
+//   if (result) {
+//     // The extension has the permissions.
+//   } else {
+//     // The extension doesn't have the permissions.
+//   }
+// });
+// chrome.permissions.remove({
+//   permissions: ['tabs'],
+//   origins: ['https://www.google.com/']
+// }, (removed) => {
+//   if (removed) {
+//     // The permissions have been removed.
+//   } else {
+//     // The permissions have not been removed (e.g., you tried to remove
+//     // required permissions).
+//   }
+// });
 // chrome.action.onClicked.addListener((tab) => {
 //   if(!tab.url.includes("chrome://")) {
 //     // chrome.scripting.executeScript({
@@ -332,9 +323,8 @@ export async function onPopupLoad() {
 //         .querySelector(".copypaste > input");
 //     var x = copy ? copy.value : window.location.href;
 //     var y = cleanDomain(x).split('/');
-//
 // 		if (y.length < 3) {
-// 			window.location.href = [await activeDomain(), y[1], "@", y[0], z].join("");
+// 			window.location.href = [await getInstance(), y[1], "@", y[0], z].join("");
 //     } else {
 // 			await search(x);
 // 			// TODO:

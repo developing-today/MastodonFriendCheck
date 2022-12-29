@@ -1,2 +1,2 @@
-import { checkPageAgainstFollowingList } from './lib.js';
-await checkPageAgainstFollowingList();
+// import { checkPageAgainstFollowingList } from './lib.js';
+// await checkPageAgainstFollowingList();

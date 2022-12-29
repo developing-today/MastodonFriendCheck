@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
  This page is shown when the extension button is clicked, because the
- "browser_action" field in manifest.json contains the "default_popup" key with
+ "browser_action" field in manifest.json contains the "action.default_popup" key with
  value "popup.html".
  -->
 <html lang="en">
@@ -28,7 +28,7 @@
         overflow: hidden;
         max-width: 400px;
       }
-      #userIdLabel {
+      #instanceLabel {
       	text-decoration: underline;
       }
     </style>
@@ -36,10 +36,11 @@
   <body>
     <h1>Mastodon Friend Checker</h1>
     <p> HELLO FRIEND! </p>
-    <p> PLEASE ENTER YOUR </p>
-    <label for="userIdTextBox">HANDLE OR INSTANCE</label>
-    <p id="userIdLabel">@drewry@social.tchncs.de</p>
-    <input type="text" name="textbox" id="userIdTextBox" />
+    <p> PLEASE ENTER OR UPDATE</p>
+    <label for="instanceTextBox">YOUR INSTANCE NAME:</label>
+    <!-- "id=instanceLabel" is dynamically overwritten by './popup.js' -->
+    <p id="instanceLabel">Example: "mastodon.social"</p>
+    <input type="text" name="textbox" id="instanceTextBox" value=""/>
     <input type="submit" type="button" name="button" id="submitButton" value="Refresh!" />
   </body>
 </html>
