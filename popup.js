@@ -114,7 +114,7 @@ export async function makeApp() {
     console.log('Success:', result);
 		return result;
 	})
-  // .then(result => { delete result.client_secret; return result })
+  .then(result => { delete result.client_secret; return result })
 	.then(setChromeStorage)
 	.catch(error => {
 		console.error('Error:', error);
@@ -123,7 +123,7 @@ export async function makeApp() {
 }
 
 export async function search(query, limit=1) {
-  console.log("QUERY:" + query);
+  console.log("QUERY:" + query); // probably a url
   let instance = await getInstance();
   let url = new URL(instance + "api/v2/search")
   url.searchParams.append('q', query);
@@ -241,8 +241,8 @@ export async function onClickFollow() {
 }
 
 export async function onLoad() {
-  await getChromeStorage(["FollowingList", "Instance", "PermissionDeniedInstance"]).then(
-    (result) => {
+  await getChromeStorage(["FollowingList", "Instance", "PermissionDeniedInstance"])
+  .then(result => {
       var instanceLabel = result.Instance
       if (instanceLabel) {
         document.getElementById("instanceTextBox").value = instanceLabel;
