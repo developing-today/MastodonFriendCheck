@@ -64,9 +64,6 @@ export function chromePermissionsToRequest(instance, query = "*") {
 
 export async function chromePermissionsToRequestForInstanceApp(instance) {
   return chromePermissionsToRequest(instance, "api/v*/*");
-  // api/v1/apps
-  // api/v1/accounts/<id>/following
-  // api/v1/accounts/<id>/follow
 }
 
 export async function requestPermissions(permissions) {
@@ -74,7 +71,7 @@ export async function requestPermissions(permissions) {
     try {
       chrome.permissions.request(permissions, result => {
         if (result) {
-          resolve();
+          resolve(permissions);
         } else {
           reject();
         }
@@ -89,7 +86,7 @@ export async function setChromeStorage(object) {
   return new Promise((resolve, reject) => {
     try {
       chrome.storage.sync.set(object, () => {
-        resolve();
+        resolve(object);
       });
     } catch (error) {
       reject(error);
@@ -197,20 +194,6 @@ export async function makeApp() {
 }
 
 export async function getAccessToken(code) {
-//   Request
-// Form data parameters
-// grant_type
-// REQUIRED String. Set equal to authorization_code if code is provided in order to gain user-level access. Otherwise, set equal to client_credentials to obtain app-level access only.
-// code
-// String. A user authorization code, obtained via GET /oauth/authorize.
-// client_id
-// REQUIRED String. The client ID, obtained during app registration.
-// client_secret
-// REQUIRED String. The client secret, obtained durign app registration.
-// redirect_uri
-// REQUIRED String. Set a URI to redirect the user to. If this parameter is set to urn:ietf:wg:oauth:2.0:oob then the token will be shown instead. Must match one of the redirect_uris declared during app registration.
-// scope
-// String. List of requested OAuth scopes, separated by spaces (or by pluses, if using query parameters). If code was provided, then this must be equal to the scope requested from the user. Otherwise, it must be a subset of scopes declared during app registration. If not provided, defaults to read.
   const storage = await getChromeStorage(["client_id", "client_secret"]);
   const url = new URL(await getInstance() + "oauth/token");
   const formData = new FormData();
@@ -228,9 +211,8 @@ export async function getAccessToken(code) {
       return result;
     })
     .then(setChromeStorage)
-    .catch((error) => {
-      console.error("Error:", error);
-    });
+    .then(result => result.access_token)
+    .catch(error => console.error("Error:", error));
 }
 
 export async function search(query, limit = 1) {
@@ -277,21 +259,16 @@ export async function getAccountIdByHandle(handle) {
 }
 
 export async function activeToken() {
-  return getChromeStorage("vapid_key").then(result => {
-    return result.vapid_key;
-  });
 }
 
 export async function follow(id) {
   let url = new URL(
-    (await getInstance()) + "api/v1/accounts/" + id + "/follow"
+    await getInstance() + "api/v1/accounts/" + id + "/follow"
   );
-  let token = await activeToken();
-  console.log(token);
   return fetch(url, {
     method: "POST",
     headers: {
-      Authorization: "Bearer " + token,
+      Authorization: "Bearer " + await activeToken(),
     }
   }).then(response => response.json());
 }
