@@ -5,10 +5,13 @@
   "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
   "version": "0.2.0",
   "action": {
-    "default_icon": "icon.png",
-    "default_popup": "popup.html"
+    "default_icon":  "icon.png",
+    "default_title": "jump"
   },
-  "permissions": ["activeTab", "storage"],
+  "options_ui": {
+    "page": "options.html"
+  },
+  "permissions": ["activeTab", "alarms", "scripting", "storage"],
   "optional_host_permissions": ["https://*/*"],
   "background": {
     "service_worker": "background.js",

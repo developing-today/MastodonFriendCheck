@@ -1,19 +1,8 @@
 <!doctype html>
-<!--
- This page is shown when the extension button is clicked, because the
- "browser_action" field in manifest.json contains the "action.default_popup" key with
- value "popup.html".
- -->
 <html lang="en">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <head>
-    <!--
-      - JavaScript and HTML must be in separate files: see our Content Security
-      - Policy documentation[1] for details and explanation.
-      -
-      - [1]: https://developer.chrome.com/extensions/contentSecurityPolicy
-    -->
-    <script type="module" src="./popup.js"></script>
+    <script type="module" src="./options.js"></script>
     <title>Mastodon Friend Checker</title>
     <style>
       body {
@@ -22,7 +11,6 @@
         font-size: 60%;
       }
       #status {
-        /* avoid an excessively wide status text */
         white-space: pre;
         text-overflow: ellipsis;
         overflow: hidden;
@@ -38,7 +26,6 @@
     <p> HELLO FRIEND! </p>
     <p> PLEASE ENTER OR UPDATE</p>
     <label for="instanceTextBox">YOUR INSTANCE NAME:</label>
-    <!-- "id=instanceLabel" is dynamically overwritten by './popup.js' -->
     <p id="instanceLabel">Example: "mastodon.social"</p>
     <input type="text" name="textbox" id="instanceTextBox" value=""/>
     <input type="submit" type="button" name="button" id="submitButton" value="Refresh!" />
