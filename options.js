@@ -177,7 +177,7 @@ export async function makeApp() {
   formData.append("scopes", getAppPermissions()); // read:search read:follows
   formData.append(
     "website",
-    "https://src.developing.today/MastodonFriendCheck"
+    chrome.runtime.getManifest().homepage_url
   );
   return fetch(url, {
     method: "POST",
