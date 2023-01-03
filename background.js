@@ -1,13 +1,29 @@
 let cache = { counter: 0 };
+let versionWhichSignifiesFirstRunIsNeeded = "0.1.0";
+export function log() {
+  if (arguments && ![
+    "onUpdated",
+  ].includes(arguments[0])) {
+    console.log(...arguments);
+  }
+}
+
+export function getAppPermissions() {
+  return "write:follows"; //"read:search read:follows";
+}
+
+export function getRedirectUri() {
+  return "urn:ietf:wg:oauth:2.0:oob"
+}
 
 export async function getCurrentTab() {
   let queryOptions = {
     active: true,
     lastFocusedWindow: true,
-    url: [
-    ]
+    url: chrome.permissions.getAll().origins
   };
   let [tab] = await chrome.tabs.query(queryOptions);
+  log("tab", tab);
   return tab;
 }
 
@@ -17,14 +33,50 @@ export function syncCacheWithStorage(keys) {
 	  Object.assign(cache, storage);
     cache["lastSyncFull"] = new Date();
     cache.counter++;
+
+    if (cache.lastUrls) {
+      cache.lastUrls = cache.lastUrls.slice(-3);
+    }
     return cache;
   });
 }
 
+export async function getStorage(keys) {
+  let keysArray = Array.isArray(keys) ? keys : [keys];
+  if (keysArray.every(value => Object.keys(cache).includes(value))) {
+    return cache; // should i stop returning the whole cache?
+  } else {
+    return syncCacheWithStorage(); // TODO: perf testing?
+  }
+}
+
+export async function getStorageProperty(name) {
+  if (Array.isArray(name) && name.length > 0) {
+    name = name[0];
+  }
+  let result = await getStorage(name);
+  log("getStorageProperty", name, result);
+  return result[name];
+}
+
+
+export function createTab(url) {
+  log("createTab: " + url);
+  chrome.tabs.create({ url: url });
+}
+
 export function updateTab(url) {
+  log("updateTab: " + url);
+  chrome.tabs.update({ url: url });
+}
+
+export async function sendUrlToTab(url) {
   if (url) {
-    console.log("updateTab: " + url);
-    // chrome.tabs.update({url: url});
+    if (await getStorageProperty("OpenInNewTab")) {
+      createTab(url);
+    } else {
+      updateTab(url);
+    }
   }
 }
 
@@ -36,35 +88,22 @@ export function getCurrentVersion() {
   return chrome.runtime.getManifest().version;
 }
 
-export function createTab(url) {
-  console.log("createTab: " + url);
-  chrome.tabs.create({ url: url });
+export async function getStorageVersion() {
+  return getStorageProperty("version") || versionWhichSignifiesFirstRunIsNeeded;
 }
 
-export async function getStorage(keys) {
-  if (!Array.isArray(keys)) {
-    keys = [keys];
-  }
-  if (keys.every(value => Object.keys(cache).includes(value))) {
-    return cache;
-  } else {
-    return await syncCacheWithStorage();
-  }
+export async function setStorage(object) {
+  return chrome.storage.sync.set(object);
 }
 
-export function getStorageVersion() {
-  return getStorage(["version"]
-  ).then(result => {
-    if (result && result.version) {
-      return result.version;
-    } else {
-      return "0.1.0";
-    }
-  });
+export async function setStorageWithProperty(name, value) {
+  let object = {};
+  object[name] = value;
+  return setStorage(object);
 }
 
 export function setCurrentVersion() {
-  return setStorageWithProperty("version", getCurrentVersion());
+  return setStorageWithProperty("Version", getCurrentVersion());
 }
 
 export function removeUriHandler(url) {
@@ -89,62 +128,48 @@ export function makeHttps(url) {
   return "https://" + cleanDomain(url) + "/";
 }
 
-export async function getInstance() {
-  return makeHttps(
-    await getStorage(["Instance"]
-    ).then(result => {
-      if (result && result.Instance) {
-        return result.Instance;
-      }
-    })
-  );
+export async function getInstance(isNotForceHttps) {
+  if (isNotForceHttps) {
+    return getStorage(["Instance"]).then(result => get(result,"Instance"));
+  } else {
+    return getStorage(["InstanceHttps"]).then(result => get(result, "InstanceHttps"));
+  }
 }
 
 export async function search(query, limit = 1) {
-  console.log("query: " + query);
   let instance = await getInstance();
   if (!instance || !query) { return; }
   let url = new URL(instance + "api/v2/search");
   url.searchParams.append("q", query);
   url.searchParams.append("resolve", true);
   url.searchParams.append("limit", limit);
-  console.log("search: " + url.toString());
-  return await fetch(url
+  return fetch(url
     ).then(result => result.json()
     ).then(result => {
-      console.log("result: " + JSON.stringify(result));
+      log("result: " + JSON.stringify(result));
       return result;
     });
 }
-
-export async function setCode() { // TODO:
+export function getCodeRedirectPath() {
+  return "oauth/authorize/native";
+}
+export async function setCode(url) { // TODO:
   // https://hachyderm.io/oauth/authorize?response_type=code&client_id=-cx14PEOeRBwp4CC6rHzcy3QTGC63Z5zY3G33CHEqtk&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&scope=write%3Afollows
   // https://hachyderm.io/oauth/authorize/native?code=Ev5GQx8SdH0iMvgqZkKf-4PQG3CkrqSv1uROLwl4wIE
-  let code = currentTab.url.split("?");
-  if (await getInstance() + "oauth/authorize/native" == codeSplit[0]) {
+  let codeSplit = url.split("?");
+  if (await getInstance() +  getCodeRedirectPath() == codeSplit[0]) {
+      createTab(await getInstance());
       let code = codeSplit.split("=")[1];
-      setStorageWithProperty("code", code);
+      return setStorageWithProperty("code", code);
   }
 }
 
-export async function activeCode() {
-  return await getStorage(["code"]).then(result => {
+export async function getCode() {
+  return getStorage(["code"]).then(result => {
     if (result && result.code) {
       return result.code;
     }
   });
-}
-
-export async function follow(id) {
-  let url = new URL(
-    await getInstance() + "api/v1/accounts/" + id + "/follow"
-  );
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer " + await activeCode(),
-    }
-  }).then(response => response.json());
 }
 
 export function makeMastodonUrl(local, username, remote, status, subpath) {
@@ -153,15 +178,14 @@ export function makeMastodonUrl(local, username, remote, status, subpath) {
     url[url.length - 1] += "@" + remote;
   }
   url.push(status);
-  url.push(subpath);
+  url.push(subpath); // TODO: test this
   url = url.filter(element => element);
-  console.log("makeMastodonUrl: " , JSON.stringify( url));
   return url.join("/");
 }
 
 export function changeMastodonUriToUrl(url) {
   if (url.indexOf("/users/") > -1) {
-    url = url.replace("/users/", "/@")
+    url = url.replace("/users/", "/@");
   }
   if (url.indexOf("/statuses/") > -1) {
     url = url.replace("/statuses/", "/");
@@ -170,7 +194,7 @@ export function changeMastodonUriToUrl(url) {
 }
 
 export function explodeUrlNoHandler(url) {
-  return removeUriHandler(url).split("/");
+  return removeUriHandler(url.toString()).split("/");
 }
 
 export async function toggleMastodonUrl(url) {
@@ -202,81 +226,127 @@ export async function toggleMastodonUrl(url) {
   if (handle && handle[0] == "@") {
     let [username, remoteDomain] = handle.split("@").slice(1);
     let instance = await getInstance();
-    let domainUrl = makeHttps(hostDomain);
-    console.log("toggleMastodonUrl", "before:", JSON.stringify({hostDomain, handle, status, subpath, username, remoteDomain, instance, domainUrl, url}));
+    let hostDomainUrl = makeHttps(hostDomain);
 
+    if (hostDomainUrl == instance) {
+      if (remoteDomain && remoteDomain != instance) {
+        // local to remote
+        log("local to remote");
+
+        if (status) {
+          log("local to remote, status, subpath");
+          log("subpath not yet supported, redirecting to profile");
+          // TODO: search by status id, then redirect to original status url
+        } // else {
+          return makeMastodonUrl(remoteDomain, username);
+        // }
+      }
+    }
     let results = await search(url);
-    console.log("toggleMastodonUrl", "results: " + JSON.stringify(results));
-
     let result;
     if (status && results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
-      console.log("toggleMastodonUrl", "direct status results.");
       result = results.statuses[0];
 
     } else if (!status && results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
-      console.log("toggleMastodonUrl", "direct account results.");
       result = results.accounts[0];
 
     } else if (results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
-      console.log("toggleMastodonUrl", "indirect account results.");
       result = results.accounts[0];
 
     } else if (results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
-      console.log("toggleMastodonUrl", "indirect status results.");
       result = results.statuses[0];
       // prefer indirect account over indirect status because nuance is hard and easier to get the right account by accident
     }
 
     if (result) {
-      console.log("toggleMastodonUrl", "search result", JSON.stringify(result));
-      if (instance == domainUrl) { // local to remote, local to local, remote to remote
-        console.log("toggleMastodonUrl: use origin", JSON.stringify(result));
-        if (url == result.url) {
-          console.log("toggleMastodonUrl: pre-empting local to local", result.url);
-        } else {
-          return result.url;
-        }
-      } else {
-        let id = status ? result.id : null;
-        let domain = remoteDomain ? remoteDomain :  hostDomain;
-        let localUrl = makeMastodonUrl(instance, username, domain, id, subpath); // remote to local
-        console.log("toggleMastodonUrl: use local", localUrl);
+      let id = status ? result.id : null;
+      let domain = remoteDomain ||  hostDomain;
+      let localUrl = makeMastodonUrl(instance, username, domain, id, subpath); // remote to local
+      log("toggleMastodonUrl: use local", localUrl);
 
-        if (makeHttps(hostDomain) == instance) {
-          console.log("toggleMastodonUrl: pre-empting local to local", localUrl);
-        }
-        return localUrl;
+      if (makeHttps(hostDomain) == instance) {
+        log("toggleMastodonUrl: pre-empting local to local", localUrl);
+        return;
       }
+      return localUrl;
     } else {
-      console.log("toggleMastodonUrl: no results");
+      log("toggleMastodonUrl: no results");
     }
   }
 }
 
-export async function toggleMastodonTab(url) {
-  await toggleMastodonUrl(url).then(updateTab)
-}
-
 export async function toggleCurrentTab() {
-  await getCurrentTab()
-  .then(toggleMastodonTab);
+  await getCurrentTab().then(toggleMastodonTab);
 }
 
-export async function getAccessToken(code) {
-  const storage = await getStorage(["code", "client_id", "client_secret"]);
+export async function getToken() {
+  return getStorage("access_token");
+}
+
+export async function setToken(code) {
   const url = new URL(await getInstance() + "oauth/token");
   const formData = new FormData();
   formData.append("grant_type", "authorization_code");
   formData.append("code", code);
-  formData.append("client_id", storage.client_id);
-  formData.append("client_secret", storage.client_secret);
+  log(JSON.stringify([cache, url, formData, code]));
+  log(cache);
+  formData.append("client_id", cache.client_id);
+  formData.append("client_secret", cache.client_secret);
   formData.append("redirect_uri", getRedirectUri());
   formData.append("scope", getAppPermissions());
   return fetch(url, { method: "POST", body: formData }
   ).then(result => result.json()
+  ).then(result => { log("setToken", result); return result; }
   ).then(setStorage).then(result => result.access_token);
 }
 
+export async function follow(id) {
+  let url = new URL(
+    await getInstance() + "api/v1/accounts/" + id + "/follow"
+  );
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + await getToken(),
+    }
+  }).then(response => response.json());
+}
+
+export function get(object, property) {
+  return object && object.hasOwnProperty(property) ? object[property] : null;
+}
+
+export async function toggleMastodonTab(tab, settings) {
+  // if (url && url.indexOf(getCodeRedirectPath() > -1)) {
+  //   log("toggleMastodonTab: code redirect");
+  //   return setCode(url).then(setToken);
+  // } else {
+    if (tab && tab.url) {
+      return toggleMastodonUrl(tab.url).then(async result => {
+        if (!result) {
+          return;
+        }
+        let url = get(result, "url") || result;
+        log("toggleMastodon", url);
+        if (get(settings, "onClicked") || await getStorageProperty("AutoRedirectOnLoad")) {
+          return sendUrlToTab(result);
+        } else {
+          log("toggleMastodonTab: no redirect", result);
+          retur
+        }
+      });
+    } else {
+      log("toggleMastodonTab: no tab");
+      let current_tab = await getCurrentTab();
+      log(current_tab);
+      if (current_tab && current_tab.url) {
+        log(toggleMastodonUrl(current_tab.url));
+      }
+    }
+  // }
+}
+
+// TODO: for content script follow->following?
 // export async function onMessage(message, sender, sendResponse) {
 //   if (message.type === "getStorage") {
 //     await getStorage(message.keys).then(result => {
@@ -293,7 +363,7 @@ export async function getAccessToken(code) {
 //   } else if (message.type === "setOauthCode") {
 //     await setOauthCode();
 //   }
-// }
+// } // TODO sendResponse
 
 export function onAlarm(alarm) {
   if (alarm.name === "syncCacheWithStorage") {
@@ -301,11 +371,8 @@ export function onAlarm(alarm) {
   }
 }
 
-export async function onClicked(tab) {
-  await toggleMastodonTab(tab.url);
-}
 export async function onInstalled(reason) {
-  if (reason === chrome.runtime.OnInstalledReason.INSTALL) {
+  if ([chrome.runtime.OnInstalledReason.INSTALL, "onClicked"].includes(reason)) {
     await syncCacheWithStorage();
     if (await getCurrentVersion() !== await getStorageVersion()) {
       if (chrome.runtime.openOptionsPage) {
@@ -317,33 +384,197 @@ export async function onInstalled(reason) {
   }
 }
 
-export function onStorageChanged(changes, namespace) {
+export function onChanged(changes, namespace) {
   for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
     cache[key] = newValue;
   }
   cache["lastSyncPartial"] = new Date();
 };
 
-export function onActivity(tabId, changeInfo, tab) {
-  if (tab && tab.url) {
-    cache.lastUrl = tab.url;
-    cache.lastTabId = tabId;
-    cache.lastTabUpdated = new Date();
-    toggleMastodonTab(tab.url);
+export async function onClicked(tab) {
+  log("onClicked", tab);
+  if (await getStorageVersion() === versionWhichSignifiesFirstRunIsNeeded) {
+    return await onInstalled("onClicked");
+  }
+  if (await getStorageProperty("OnClickedToggle")) {
+    log("onClicked", "OnClickedToggle enabled");
+    return await onUpdated(tab.id, { status: "onClicked", onClicked: true }, tab);
+  } else {
+    log("onClicked", "OnClickedToggle disabled");
   }
 }
 
-chrome.action.setBadgeBackgroundColor({color: 'green'});
-chrome.action.setBadgeText({
-    text: getTabBadge(tabId),
-    tabId: getTabId(),
-  });
-chrome.action.onClicked.addListener(onActivity);
+export async function onUpdated(tabId, changeInfo, tab) {
+  log("onUpdated", tabId, changeInfo, tab);
+  if (["loading", "onClicked"].includes(changeInfo.status) && tab && tab.url && tab.status) {
 
-chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 15});
+    if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
+      log("onUpdated", "code redirect", tab.url);
+    }
+    let timeBetweenUpdates = 1000 * 1;
+    let timestamp = new Date();
+
+    if (!cache) { cache = {}; }
+
+    if (get(cache, "lastTabUpdated") > timestamp - timeBetweenUpdates) {
+      log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
+      return;
+    }
+
+    if (get(cache, "InstanceHttps") && cache.InstanceHttps.length > 0) {
+
+      if (tab.url.indexOf(cache.InstanceHttps) > -1) {
+        log("onUpdated", "url is local", tab.url);
+        if (changeInfo.status === "onClicked") {
+          log("onUpdated", "onClicked on local url", tab.url);
+        } else {
+          return;
+        }
+      } else {
+        log("onUpdated", "url is not local", tab.url);
+      }
+    } else {
+      log("onUpdated", "no instance", tab.url, cache);
+    }
+
+    if (!get(cache, "lastUrls") || !Array.isArray(cache.lastUrls)) {
+      log("onUpdated", "lastUrls was not an array", cache.lastUrls);
+      cache.lastUrls = [];
+    }
+
+    if (cache.lastUrls.length > 0) {
+      let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1];
+
+      if (lastUrlData.url === tab.url) {
+        log("onUpdated", "lastUrl was the same", { lastUrlData });
+        let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 5;
+
+        if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
+          log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
+          return;
+        }
+      }
+
+      let timeBetweenUpdatesForSameUrl = 1000 * 5;
+
+      if (cache.lastUrls.some(lastUrl => lastUrl.url === tab.url && lastUrl.timestamp > timestamp - timeBetweenUpdatesForSameUrl)) {
+        log("onUpdated", "url was too new", { lastUrl });
+        return;
+      }
+    }
+
+    cache.lastUrls = cache.lastUrls.slice(-9);
+    cache.lastUrls.push({ url: tab.url, timestamp });
+    cache.lastTabId = tabId;
+    cache.lastTabUpdated = timestamp;
+
+    let settings = changeInfo
+    await toggleMastodonTab(tab, settings);
+
+  }
+}
+
+chrome.action.onClicked.addListener(onClicked);
+
+chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 5});
 chrome.alarms.onAlarm.addListener(onAlarm);
+
 chrome.runtime.onInstalled.addListener(onInstalled);
-chrome.storage.onChanged.addListener(onStorageChanged);
-chrome.tabs.onUpdated.addListener(onActivity);
-chrome.tabs.onUpdated.addListener(on);
+
+chrome.storage.onChanged.addListener(onChanged);
+
+chrome.tabs.onUpdated.addListener(onUpdated);
+
 syncCacheWithStorage();
+
+/*
+// todo:
+
+----
+
+code redirects based on url
+
+but it can overwhelm api limits
+
+oauth is setup
+but access token is untested
+and 'follow' and 'list following' logic is not implemented
+
+popup moved to options
+but action button is unused sofar
+
+need to add options
+jump
+  - autojump
+  - jump on copypaste
+  - manual jump
+follow
+  - following when following
+  - follow button works
+- new tab or update current_tab
+  - must fix update current tab
+
+improve caching
+  cache all url translations ? both ways?
+  cache timing / max search calls per minute ___
+
+
+improve and guarantee tab updates happen in correct window or otherwise always in a new tab.
+maybe close current activetab, then open new tab
+but that might scare a user and be unreliable
+
+
+does following list need private access?
+
+create tab vs new tab
+
+
+----
+
+
+follow
+following
+follower
+blocked
+muted
+mutuals
+
+[[2023-01-02 Monday]][[z/2023/01/02]]
+<enable extended access for all tabs>
+  - you give chaos goblin power? <confirm>
+  - fix original page following button as above
+    - needs * host permission for content script
+    - may need or be easier with oauth for original instance for api
+    - may need oauth scope read:follows, read:blocks, read:mutes
+  - if you click a link from local mastodon, the numbers are updated to = original page
+    - needs * host permission for cors
+    - needs fetch to query original instance
+  - allow follow button to be clicked and work
+    - needs * host permission for content script
+    - needs fetch to query original instance
+    - needs oauth for original instance for api
+    - needs oauth scope write:follows
+
+
+-----
+
+
+move oauth app config into settings page separte from initial app
+
+phases
+0 no config
+1 config mastodon instance, gaet chrome host for instance
+  - user must grant permissions
+2 config oauth app for instance, get oauth client id and secret,
+  - user must grant permissions for oauth app
+3 get token
+  - user will see redirect url before extension redirects
+
+is there a change scope path without full oauth rebuild?
+will dev today actually have to host oauth app?
+
+
+-----
+
+TODO: if handle, add to app name, add isodate
+*/

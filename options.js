@@ -1,3 +1,11 @@
+export function log() {
+  console.log(...arguments);
+}
+
+export function get(object, property) {
+  return object && object.hasOwnProperty(property) ? object[property] : null;
+}
+
 export function permissionRequiredInnerHTML() {
   return "Permission required.<br>Please try again.";
 }
@@ -11,8 +19,9 @@ export function getRedirectUri() {
 }
 
 export function keyPress(e) {
-  var x = e || window.event;
-  var key = x.keyCode || x.which;
+  let x = e || window.event;
+  let key = x.keyCode || x.which;
+
   if (key == 13 || key == 3) {
     document.getElementById("submitButton").click();
   }
@@ -25,10 +34,13 @@ export function removeUriHandler(url) {
 }
 
 export function cleanDomain(domain) {
-  if (!domain) return;
+
+  if (!domain) { return };
   let cleanDomain = removeUriHandler(domain);
+
   if (cleanDomain.toString().includes("/")) {
     return cleanDomain.split("/")[0];
+
   } else {
     return cleanDomain;
   }
@@ -61,17 +73,29 @@ export function newTab(url) {
 }
 
 export async function getStorage(keys) {
-  return chrome.storage.sync.get(keys);
+  return chrome.storage.sync.get(Array.isArray(keys) ? keys : [keys]);
+}
+
+export async function getStorageProperty(name) {
+  if (Array.isArray(name) && name.length > 0) {
+    name = name[0];
+  }
+  let result = await getStorage(name);
+  return result[name];
 }
 
 export function getCurrentVersion() {
   return chrome.runtime.getManifest().version;
 }
 
+export async function getStorageVersion() {
+  return getStorageProperty("version") || "0.1.0";
+}
+
 export async function setStorageWithProperty(name, value) {
-  var object = {};
+  let object = {};
   object[name] = value;
-  return await setStorage(object);
+  return setStorage(object);
 }
 
 export function setCurrentVersion() {
@@ -79,19 +103,16 @@ export function setCurrentVersion() {
 }
 
 export async function getClientId() {
-  return await getStorage(["client_id"]);
+  return getStorage(["client_id"]);
 }
 
+export async function getInstance(isNotForceHttps) {
 
-export async function getInstance() {
-  return makeHttps(
-    await getStorage(["Instance"]
-    ).then(result => {
-      if (result && result.Instance) {
-        return result.Instance;
-      }
-    })
-  );
+  if (isNotForceHttps) {
+    return getStorage(["Instance"]).then(result => { return result.Instance; });
+  } else {
+    return getStorage(["InstanceHttps"]).then(result => { return result.InstanceHttps; });
+  }
 }
 
 export async function authorizeUser() {
@@ -167,9 +188,12 @@ export async function makeApp() {
 
 export async function onResult() {
   let result = getStorage(["FollowingList", "Instance"])
+
   if (result.Instance) {
-    var instanceLabel = result.Instance;
+    let instanceLabel = result.Instance;
+
     if (result.FollowingList) {
+
       if (result.FollowingList.length > 0) {
         instanceLabel =
           instanceLabel + "\n(" + result.FollowingList.length + ")";
@@ -186,26 +210,89 @@ export async function permissionDeniedInstance() {
 }
 
 export async function permissionGrantedInstance(input) {
-  setStorage({
+  console.log("permissionGrantedInstance", input);
+  await setStorage({
     Instance: input,
+    InstanceHttps: makeHttps(input),
     PermissionDeniedInstance: false,
     Version: getCurrentVersion(),
   }).then(() => onResult);
 }
 
-export async function initializeMastodonExtension() {
-  return makeApp()
-      .then(() => authorizeUser()
-      ).then(() => setCurrentVersion());
+export async function setOauthOption(value) {
+  return setStorageWithProperty("OauthApp", value);
 }
 
-export async function onClick() {
-  var input = document.getElementById("instanceTextBox").value.trim();
+export async function initializeMastodonExtension() {
+  return makeApp()
+  .then(() => authorizeUser()
+  ).then(() => setOauthOption(true)
+  ).then(() => setCurrentVersion());
+}
+
+export async function ifTrueThenInitializeMastodonExtension(option, optionElement, settings) {
+  if (get(optionElement, "checked")) {
+    await initializeMastodonExtension(
+    ).then(() => setOauthOption(true)
+    ).catch(() => setOauthOption(false));
+  }
+}
+
+export async function onClicked() {
+  let input = document.getElementById("instanceTextBox").value.trim();
+
   if (input && input != "Thanks!") {
     await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
     ).then(() => permissionGrantedInstance(input)
-    ).catch(() => permissionDeniedInstance());
-    await initializeMastodonExtension();
+    ).catch(() => permissionDeniedInstance()
+    ).then(() => setCurrentVersion());
+  }
+}
+
+export async function setupOptionsListenerById(option, settings) {
+  let disabled = false;
+
+  if (get(settings, "disabled")) {
+    disabled = settings.disabled;
+  }
+
+  let optionElement = document.getElementById(option);
+
+  if (optionElement) {
+    let result = await getStorage([option]);
+    if (result[option] === undefined || result[option] === null) {
+      result[option] = get(settings, "default");
+    }
+    if (result[option]) {
+      optionElement.checked = true;
+
+    } else {
+      optionElement.checked = false;
+    }
+
+    let defaultListener = async () => {
+      await setStorageWithProperty(option, optionElement.checked);
+    }
+
+    let listener = defaultListener;
+    let listenerOption = get(settings, "listener");
+
+    if (listenerOption) {
+      listener = () => listenerOption(option, optionElement, settings);
+    }
+
+    optionElement.addEventListener("click", listener);
+
+    setOauthOption(optionElement.checked);
+
+    if (disabled) {
+      optionElement.classList.add("disabled");
+      optionElement.classList.remove("enabled");
+
+    } else {
+      optionElement.classList.add("enabled");
+      optionElement.classList.remove("disabled");
+    }
   }
 }
 
@@ -215,15 +302,20 @@ export async function onLoad() {
     "Instance",
     "PermissionDeniedInstance",
   ]).then(result => {
-    var instanceLabel = result.Instance;
+    let instanceLabel = result.Instance;
+
     if (result.Instance) {
       document.getElementById("instanceTextBox").value = instanceLabel;
     }
+
     if (result.PermissionDeniedInstance) {
       document.getElementById("instanceLabel").innerHTML =
         permissionRequiredInnerHTML();
+
     } else if (instanceLabel) {
+
       if (result.FollowingList) {
+
         if (
           Array.isArray(result.FollowingList) &&
           result.FollowingList.length > 0
@@ -232,19 +324,29 @@ export async function onLoad() {
             instanceLabel + "\n(" + result.FollowingList.length + ")";
         }
       }
+
       if (!result.PermissionDeniedInstance) {
         document.getElementById("instanceLabel").innerHTML = instanceLabel;
       }
     }
   });
 
-  var submitButtonElement = document.getElementById("submitButton");
+  let submitButtonElement = document.getElementById("submitButton");
+
   if (submitButtonElement) {
-    submitButtonElement.addEventListener("click", onClick);
+    submitButtonElement.addEventListener("click", onClicked);
   }
+
+  await setupOptionsListenerById("OpenInNewTab", { disabled: false });
+  await setupOptionsListenerById("AutoRedirectOnLoad", { disabled: false });
+  await setupOptionsListenerById("AutoRedirectOnCopyPrompt", { disabled: true });
+  await setupOptionsListenerById("ReadWriteAll", { disabled: true });
+  await setupOptionsListenerById("OauthApp", { disabled: false, listener: ifTrueThenInitializeMastodonExtension });
+  await setupOptionsListenerById("UpdateStats", { disabled: true });
+  await setupOptionsListenerById("Following", { disabled: true });
+  await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
+  await setupOptionsListenerById("OnClickedReadWrite", { disabled: true });
   document.onkeypress = keyPress;
 }
 
 document.addEventListener("DOMContentLoaded", onLoad);
-
-// TODO: if app is setup toggle current url
