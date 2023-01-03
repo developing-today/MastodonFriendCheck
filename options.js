@@ -1,7 +1,3 @@
-export function log() {
-  console.log(...arguments);
-}
-
 export function get(object, property) {
   return object && object.hasOwnProperty(property) ? object[property] : null;
 }

@@ -1,11 +1,9 @@
 let cache = { counter: 0 };
 let versionWhichSignifiesFirstRunIsNeeded = "0.1.0";
-export function log() {
-  if (arguments && ![
-    "onUpdated",
-  ].includes(arguments[0])) {
-    console.log(...arguments);
-  }
+
+export function get(object, property, settings) {
+  let defaultValue = settings ? get(settings, "default") : null;
+  return object && object.hasOwnProperty(property) ? object[property] : defaultValue;
 }
 
 export function getAppPermissions() {
@@ -23,7 +21,7 @@ export async function getCurrentTab() {
     url: chrome.permissions.getAll().origins
   };
   let [tab] = await chrome.tabs.query(queryOptions);
-  log("tab", tab);
+  console.log("tab", tab);
   return tab;
 }
 
@@ -55,18 +53,18 @@ export async function getStorageProperty(name) {
     name = name[0];
   }
   let result = await getStorage(name);
-  log("getStorageProperty", name, result);
+  console.log("getStorageProperty", name, result);
   return result[name];
 }
 
 
 export function createTab(url) {
-  log("createTab: " + url);
+  console.log("createTab: " + url);
   chrome.tabs.create({ url: url });
 }
 
 export function updateTab(url) {
-  log("updateTab: " + url);
+  console.log("updateTab: " + url);
   chrome.tabs.update({ url: url });
 }
 
@@ -136,23 +134,28 @@ export async function getInstance(isNotForceHttps) {
   }
 }
 
-export async function search(query, limit = 1) {
+export async function status(id, settings) {
+  let instance = get(settings, instance) || getInstance();
+  if (!instance || !id) { return; }
+  let url = new URL(instance + "api/v1/statuses/" + id);
+  return fetch(url).then(result => result.json());
+}
+
+export async function search(query, settings) {
+  let limit = get(settings, "limit", { default: 10 });
   let instance = await getInstance();
   if (!instance || !query) { return; }
   let url = new URL(instance + "api/v2/search");
   url.searchParams.append("q", query);
   url.searchParams.append("resolve", true);
   url.searchParams.append("limit", limit);
-  return fetch(url
-    ).then(result => result.json()
-    ).then(result => {
-      log("result: " + JSON.stringify(result));
-      return result;
-    });
+  return fetch(url).then(result => result.json());
 }
+
 export function getCodeRedirectPath() {
   return "oauth/authorize/native";
 }
+
 export async function setCode(url) { // TODO:
   // https://hachyderm.io/oauth/authorize?response_type=code&client_id=-cx14PEOeRBwp4CC6rHzcy3QTGC63Z5zY3G33CHEqtk&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&scope=write%3Afollows
   // https://hachyderm.io/oauth/authorize/native?code=Ev5GQx8SdH0iMvgqZkKf-4PQG3CkrqSv1uROLwl4wIE
@@ -231,46 +234,56 @@ export async function toggleMastodonUrl(url) {
     if (hostDomainUrl == instance) {
       if (remoteDomain && remoteDomain != instance) {
         // local to remote
-        log("local to remote");
+        console.log("local to remote");
 
         if (status) {
-          log("local to remote, status, subpath");
-          log("subpath not yet supported, redirecting to profile");
-          // TODO: search by status id, then redirect to original status url
-        } // else {
+          console.log("local to remote, status, subpath");
+          console.log("subpath not yet supported, redirecting to profile");
+          let results = await status(status);
+          console.log(results);
+          return await get(results, "url");
+        } else {
           return makeMastodonUrl(remoteDomain, username);
-        // }
+        }
       }
-    }
-    let results = await search(url);
-    let result;
-    if (status && results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
-      result = results.statuses[0];
+    } else if (remoteDomain && remoteDomain == instance) {
+      // remote to local
+      console.log("remote to local");
+      if (!localStatus) {
+        console.log("remote to local, no local status");
+        return makeMastodonUrl(hostDomain, username);
+      } else {
+        let results = await search(url);
+        let result;
+        if (status && results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
+          result = results.statuses[0];
 
-    } else if (!status && results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
-      result = results.accounts[0];
+        } else if (!status && results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
+          result = results.accounts[0];
 
-    } else if (results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
-      result = results.accounts[0];
+        } else if (results.accounts && Array.isArray(results.accounts) && results.accounts.length > 0) {
+          result = results.accounts[0];
 
-    } else if (results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
-      result = results.statuses[0];
-      // prefer indirect account over indirect status because nuance is hard and easier to get the right account by accident
-    }
+        } else if (results.statuses && Array.isArray(results.statuses) && results.statuses.length > 0) {
+          result = results.statuses[0];
+          // prefer indirect account over indirect status because nuance is hard and easier to get the right account by accident
+        }
 
-    if (result) {
-      let id = status ? result.id : null;
-      let domain = remoteDomain ||  hostDomain;
-      let localUrl = makeMastodonUrl(instance, username, domain, id, subpath); // remote to local
-      log("toggleMastodonUrl: use local", localUrl);
+        if (result) {
+          let id = status ? result.id : null;
+          let domain = remoteDomain ||  hostDomain;
+          let localUrl = makeMastodonUrl(instance, username, domain, id, subpath); // remote to local
+          console.log("toggleMastodonUrl: use local", localUrl);
 
-      if (makeHttps(hostDomain) == instance) {
-        log("toggleMastodonUrl: pre-empting local to local", localUrl);
-        return;
+          if (makeHttps(hostDomain) == instance) {
+            console.log("toggleMastodonUrl: pre-empting local to local", localUrl);
+            return;
+          }
+          return localUrl;
+        } else {
+          console.log("toggleMastodonUrl: no results");
+        }
       }
-      return localUrl;
-    } else {
-      log("toggleMastodonUrl: no results");
     }
   }
 }
@@ -288,15 +301,15 @@ export async function setToken(code) {
   const formData = new FormData();
   formData.append("grant_type", "authorization_code");
   formData.append("code", code);
-  log(JSON.stringify([cache, url, formData, code]));
-  log(cache);
+  console.log(JSON.stringify([cache, url, formData, code]));
+  console.log(cache);
   formData.append("client_id", cache.client_id);
   formData.append("client_secret", cache.client_secret);
   formData.append("redirect_uri", getRedirectUri());
   formData.append("scope", getAppPermissions());
   return fetch(url, { method: "POST", body: formData }
   ).then(result => result.json()
-  ).then(result => { log("setToken", result); return result; }
+  ).then(result => { console.log("setToken", result); return result; }
   ).then(setStorage).then(result => result.access_token);
 }
 
@@ -312,13 +325,9 @@ export async function follow(id) {
   }).then(response => response.json());
 }
 
-export function get(object, property) {
-  return object && object.hasOwnProperty(property) ? object[property] : null;
-}
-
 export async function toggleMastodonTab(tab, settings) {
   // if (url && url.indexOf(getCodeRedirectPath() > -1)) {
-  //   log("toggleMastodonTab: code redirect");
+  //   console.log("toggleMastodonTab: code redirect");
   //   return setCode(url).then(setToken);
   // } else {
     if (tab && tab.url) {
@@ -327,20 +336,20 @@ export async function toggleMastodonTab(tab, settings) {
           return;
         }
         let url = get(result, "url") || result;
-        log("toggleMastodon", url);
+        console.log("toggleMastodon", url);
         if (get(settings, "onClicked") || await getStorageProperty("AutoRedirectOnLoad")) {
           return sendUrlToTab(result);
         } else {
-          log("toggleMastodonTab: no redirect", result);
+          console.log("toggleMastodonTab: no redirect", result);
           retur
         }
       });
     } else {
-      log("toggleMastodonTab: no tab");
+      console.log("toggleMastodonTab: no tab");
       let current_tab = await getCurrentTab();
-      log(current_tab);
+      console.log(current_tab);
       if (current_tab && current_tab.url) {
-        log(toggleMastodonUrl(current_tab.url));
+        console.log(toggleMastodonUrl(current_tab.url));
       }
     }
   // }
@@ -392,24 +401,24 @@ export function onChanged(changes, namespace) {
 };
 
 export async function onClicked(tab) {
-  log("onClicked", tab);
+  console.log("onClicked", tab);
   if (await getStorageVersion() === versionWhichSignifiesFirstRunIsNeeded) {
     return await onInstalled("onClicked");
   }
   if (await getStorageProperty("OnClickedToggle")) {
-    log("onClicked", "OnClickedToggle enabled");
+    console.log("onClicked", "OnClickedToggle enabled");
     return await onUpdated(tab.id, { status: "onClicked", onClicked: true }, tab);
   } else {
-    log("onClicked", "OnClickedToggle disabled");
+    console.log("onClicked", "OnClickedToggle disabled");
   }
 }
 
 export async function onUpdated(tabId, changeInfo, tab) {
-  log("onUpdated", tabId, changeInfo, tab);
+  console.log("onUpdated", tabId, changeInfo, tab);
   if (["loading", "onClicked"].includes(changeInfo.status) && tab && tab.url && tab.status) {
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
-      log("onUpdated", "code redirect", tab.url);
+      console.log("onUpdated", "code redirect", tab.url);
     }
     let timeBetweenUpdates = 1000 * 1;
     let timestamp = new Date();
@@ -417,28 +426,28 @@ export async function onUpdated(tabId, changeInfo, tab) {
     if (!cache) { cache = {}; }
 
     if (get(cache, "lastTabUpdated") > timestamp - timeBetweenUpdates) {
-      log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
+      console.log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
       return;
     }
 
     if (get(cache, "InstanceHttps") && cache.InstanceHttps.length > 0) {
 
       if (tab.url.indexOf(cache.InstanceHttps) > -1) {
-        log("onUpdated", "url is local", tab.url);
+        console.log("onUpdated", "url is local", tab.url);
         if (changeInfo.status === "onClicked") {
-          log("onUpdated", "onClicked on local url", tab.url);
+          console.log("onUpdated", "onClicked on local url", tab.url);
         } else {
           return;
         }
       } else {
-        log("onUpdated", "url is not local", tab.url);
+        console.log("onUpdated", "url is not local", tab.url);
       }
     } else {
-      log("onUpdated", "no instance", tab.url, cache);
+      console.log("onUpdated", "no instance", tab.url, cache);
     }
 
     if (!get(cache, "lastUrls") || !Array.isArray(cache.lastUrls)) {
-      log("onUpdated", "lastUrls was not an array", cache.lastUrls);
+      console.log("onUpdated", "lastUrls was not an array", cache.lastUrls);
       cache.lastUrls = [];
     }
 
@@ -446,11 +455,11 @@ export async function onUpdated(tabId, changeInfo, tab) {
       let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1];
 
       if (lastUrlData.url === tab.url) {
-        log("onUpdated", "lastUrl was the same", { lastUrlData });
+        console.log("onUpdated", "lastUrl was the same", { lastUrlData });
         let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 5;
 
         if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
-          log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
+          console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
           return;
         }
       }
@@ -458,7 +467,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
       let timeBetweenUpdatesForSameUrl = 1000 * 5;
 
       if (cache.lastUrls.some(lastUrl => lastUrl.url === tab.url && lastUrl.timestamp > timestamp - timeBetweenUpdatesForSameUrl)) {
-        log("onUpdated", "url was too new", { lastUrl });
+        console.log("onUpdated", "url was too new", { lastUrl });
         return;
       }
     }
