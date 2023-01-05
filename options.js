@@ -1,5 +1,8 @@
-export function get(object, property) {
-  return object && object.hasOwnProperty(property) ? object[property] : null;
+export function get(object, property, settings) {
+  let defaultValue = settings ? get(settings, "default") : null;
+  return object && property && object.hasOwnProperty(property)
+          && object[property] !== undefined && object[property] !== null
+          ? object[property] : defaultValue;
 }
 
 export function permissionRequiredInnerHTML() {
@@ -61,6 +64,7 @@ export async function requestPermissions(permissions) {
 }
 
 export async function setStorage(object) {
+  // TODO:   if(chrome.runtime.lastError) {
   return chrome.storage.sync.set(object);
 }
 
@@ -85,7 +89,7 @@ export function getCurrentVersion() {
 }
 
 export async function getStorageVersion() {
-  return getStorageProperty("version") || "0.1.0";
+  return getStorageProperty("Version") || "0.1.0";
 }
 
 export async function setStorageWithProperty(name, value) {
@@ -95,7 +99,7 @@ export async function setStorageWithProperty(name, value) {
 }
 
 export function setCurrentVersion() {
-  return setStorageWithProperty("version", getCurrentVersion());
+  return setStorageWithProperty("Version", getCurrentVersion());
 }
 
 export async function getClientId() {
@@ -146,8 +150,8 @@ export async function makeApp() {
       The client_secret should not be needed?
       One should use something like pkce if masto supports.
       Haven't checked yet.
-      UPDATE: checked it does not. something else then.
-              probably a cloudflare worker.
+      UPDATE: checked it does not.
+              https://github.com/mastodon/mastodon/issues/21913
 
       Alternatively I can host something for this
       or a cloudflare worker or something.
@@ -226,8 +230,8 @@ export async function initializeMastodonExtension() {
   ).then(() => setCurrentVersion());
 }
 
-export async function ifTrueThenInitializeMastodonExtension(option, optionElement, settings) {
-  if (get(optionElement, "checked")) {
+export async function ifTrueThenInitializeMastodonExtension(option, element, settings) {
+  if (get(element, "checked")) {
     await initializeMastodonExtension(
     ).then(() => setOauthOption(true)
     ).catch(() => setOauthOption(false));
@@ -242,6 +246,8 @@ export async function onClicked() {
     ).then(() => permissionGrantedInstance(input)
     ).catch(() => permissionDeniedInstance()
     ).then(() => setCurrentVersion());
+
+    window.location.reload();
   }
 }
 
@@ -252,42 +258,45 @@ export async function setupOptionsListenerById(option, settings) {
     disabled = settings.disabled;
   }
 
-  let optionElement = document.getElementById(option);
+  let element = document.getElementById(option);
 
-  if (optionElement) {
+  if (element) {
     let result = await getStorage([option]);
-    if (result[option] === undefined || result[option] === null) {
-      result[option] = get(settings, "default");
+
+    if (option in result === false || result[option] === null || result[option] === undefined) {
+      console.log("setting default for", option);
+      result[option] = get(settings, "default", { default: false });
+      console.log("result[option]", {option, result});
+      await setStorageWithProperty(option, result[option]);
     }
+
     if (result[option]) {
-      optionElement.checked = true;
+      element.checked = true;
 
     } else {
-      optionElement.checked = false;
+      element.checked = false;
     }
 
-    let defaultListener = async () => {
-      await setStorageWithProperty(option, optionElement.checked);
+    let defaultCallback = async () => {
+      await setStorageWithProperty(option, element.checked);
     }
 
-    let listener = defaultListener;
-    let listenerOption = get(settings, "listener");
+    let callback = defaultCallback;
+    let callbackSetting = get(settings, "callback");
 
-    if (listenerOption) {
-      listener = () => listenerOption(option, optionElement, settings);
+    if (callbackSetting) {
+      callback = () => callbackSetting(option, element, settings);
     }
 
-    optionElement.addEventListener("click", listener);
-
-    setOauthOption(optionElement.checked);
+    element.addEventListener("click", callback);
 
     if (disabled) {
-      optionElement.classList.add("disabled");
-      optionElement.classList.remove("enabled");
+      element.classList.add("disabled");
+      element.classList.remove("enabled");
 
     } else {
-      optionElement.classList.add("enabled");
-      optionElement.classList.remove("disabled");
+      element.classList.add("enabled");
+      element.classList.remove("disabled");
     }
   }
 }
@@ -337,7 +346,7 @@ export async function onLoad() {
   await setupOptionsListenerById("AutoRedirectOnLoad", { disabled: false });
   await setupOptionsListenerById("AutoRedirectOnCopyPrompt", { disabled: true });
   await setupOptionsListenerById("ReadWriteAll", { disabled: true });
-  await setupOptionsListenerById("OauthApp", { disabled: false, listener: ifTrueThenInitializeMastodonExtension });
+  await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonExtension });
   await setupOptionsListenerById("UpdateStats", { disabled: true });
   await setupOptionsListenerById("Following", { disabled: true });
   await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
