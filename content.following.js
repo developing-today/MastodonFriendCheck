@@ -1,4 +1,4 @@
-console.log("content.js loaded");
+console.log("content.js following loaded");
 
 /*
 

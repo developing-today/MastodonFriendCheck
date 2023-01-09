@@ -1,6 +1,6 @@
 export function get(object, property, settings) {
   let defaultValue = settings ? get(settings, "default") : null;
-  return object && property && object.hasOwnProperty(property)
+  return object && property && property in object
           && object[property] !== undefined && object[property] !== null
           ? object[property] : defaultValue;
 }
@@ -51,20 +51,26 @@ export function makeHttps(url) {
 
 export function extensionPermissionsToRequest(instance, query = ["*"]) {
   return {
-    origins: [makeHttps(instance) + query],
+    origins: query.map(query => makeHttps(instance) + query)
   };
 }
 
 export async function extensionPermissionsToRequestForInstanceApp(instance) {
-  return extensionPermissionsToRequest(instance, ["api/v*/*", "oauth/*"]);
+  return extensionPermissionsToRequest(instance, ["api/v*/*", "oauth/*", "@*"]);
+}
+
+export async function extensionPermissionsToRequestForReadWriteAllOrigin() {
+  return extensionPermissionsToRequest("*", ["*"]);
 }
 
 export async function requestPermissions(permissions) {
+  console.log("requesting permissions", permissions);
   return chrome.permissions.request(permissions);
 }
 
 export async function setStorage(object) {
   // TODO:   if(chrome.runtime.lastError) {
+  console.log("setStorage", object);
   return chrome.storage.sync.set(object);
 }
 
@@ -170,6 +176,7 @@ export async function makeApp() {
       // }
 
   */
+  console.log("Making App");
   const url = new URL((await getInstance()) + "api/v1/apps");
   const formData = new FormData();
   formData.append("client_name", "Mastodon Friend Checker");
@@ -187,7 +194,9 @@ export async function makeApp() {
 }
 
 export async function onResult() {
+  console.log("onResult");
   let result = getStorage(["FollowingList", "Instance"])
+  console.log("onResult", { result });
 
   if (result.Instance) {
     let instanceLabel = result.Instance;
@@ -211,31 +220,75 @@ export async function permissionDeniedInstance() {
 
 export async function permissionGrantedInstance(input) {
   console.log("permissionGrantedInstance", input);
-  await setStorage({
+  let result = await setStorage({
     Instance: input,
     InstanceHttps: makeHttps(input),
+    InstanceClean: cleanDomain(input),
     PermissionDeniedInstance: false,
     Version: getCurrentVersion(),
-  }).then(() => onResult);
+  }).then(async (result) => {
+    console.log("permissionGrantedInstance", {result});
+    await onResult();
+  });
+  console.log(result);
 }
 
 export async function setOauthOption(value) {
   return setStorageWithProperty("OauthApp", value);
 }
 
+export async function setChromeReadWriteAllOption(value) {
+  return setStorageWithProperty("ReadWriteAll", value);
+}
+
+export async function initializeChromeReadWriteAllOrigin() {
+  console.log("initializeChromeReadWriteAllOrigin");
+  let permissions = await extensionPermissionsToRequestForReadWriteAllOrigin();
+  console.log("initializeChromeReadWriteAllOrigin", {permissions});
+
+  return await requestPermissions(
+    permissions
+  ).then(() => setChromeReadWriteAllOption(true)
+  ).then(() => setCurrentVersion());
+}
+
 export async function initializeMastodonExtension() {
+  console.log("initializeMastodonExtension");
   return makeApp()
   .then(() => authorizeUser()
   ).then(() => setOauthOption(true)
   ).then(() => setCurrentVersion());
 }
 
+export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, element, settings) {
+  console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {option, element, settings});
+  let checked = get(element, "checked");
+  console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {checked});
+
+  if (checked) {
+    console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "checked");
+    await initializeChromeReadWriteAllOrigin(
+    ).then(() => setOauthOption(true)
+    ).catch(() => setOauthOption(false));
+  } else {
+    console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
+    await setOauthOption(false);
+  }
+  window.location.reload(); // comment out during development
+}
+
 export async function ifTrueThenInitializeMastodonExtension(option, element, settings) {
+  console.log("ifTrueThenInitializeMastodonExtension", {option, element, settings});
   if (get(element, "checked")) {
+    console.log("ifTrueThenInitializeMastodonExtension", "checked");
     await initializeMastodonExtension(
     ).then(() => setOauthOption(true)
     ).catch(() => setOauthOption(false));
+  } else {
+    console.log("ifTrueThenInitializeMastodonExtension", "unchecked");
+    await setOauthOption(false);
   }
+  window.location.reload(); // comment out during development
 }
 
 export async function onClicked() {
@@ -247,11 +300,14 @@ export async function onClicked() {
     ).catch(() => permissionDeniedInstance()
     ).then(() => setCurrentVersion());
 
-    window.location.reload();
+    setStorageWithProperty("Instance", input);
+    window.location.reload(); // comment out during development
   }
 }
 
 export async function setupOptionsListenerById(option, settings) {
+  console.log("setupOptionsListenerById", {option, settings});
+
   let disabled = false;
 
   if (get(settings, "disabled")) {
@@ -259,6 +315,9 @@ export async function setupOptionsListenerById(option, settings) {
   }
 
   let element = document.getElementById(option);
+  let dropdown = option + "Dropdown";
+  let dropdownElement = document.getElementById(dropdown);
+  console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
   if (element) {
     let result = await getStorage([option]);
@@ -270,35 +329,83 @@ export async function setupOptionsListenerById(option, settings) {
       await setStorageWithProperty(option, result[option]);
     }
 
-    if (result[option]) {
-      element.checked = true;
-
-    } else {
-      element.checked = false;
-    }
+    element.checked = result[option] ? true : false;
 
     let defaultCallback = async () => {
+      console.log("defaultCallback", {option, element});
+      if (dropdownElement) {
+          dropdownElement.disabled = !element.checked;
+
+          for (let option of dropdownElement.options) {
+            option.disabled = !element.checked;
+          }
+      }
       await setStorageWithProperty(option, element.checked);
     }
 
-    let callback = defaultCallback;
+    let callbackFunction = defaultCallback;
     let callbackSetting = get(settings, "callback");
 
     if (callbackSetting) {
-      callback = () => callbackSetting(option, element, settings);
+      callbackFunction = () => {
+        console.log("callbackFunction", {option, element});
+        callbackSetting(option, element, settings);
+      }
     }
 
-    element.addEventListener("click", callback);
+    element.addEventListener("click", callbackFunction);
+    element.disabled = false;
 
     if (disabled) {
       element.classList.add("disabled");
       element.classList.remove("enabled");
-
     } else {
       element.classList.add("enabled");
       element.classList.remove("disabled");
     }
   }
+
+  if (dropdownElement) {
+    console.log("dropdownElement", {dropdown, dropdownElement});
+    let dropdownDefault = get(settings, "dropdownDefault");
+    let result = await getStorage([dropdown]);
+
+    if (dropdown in result === false || result[dropdown] === null || result[dropdown] === undefined) {
+      console.log("setting default for", dropdown);
+      result[dropdown] = dropdownDefault;
+      console.log("result[dropdown]", {dropdown, result});
+      await setStorageWithProperty(dropdown, result[dropdown]);
+    }
+
+    dropdownElement.value = result[dropdown];
+
+    let dropdownDefaultCallback = async () => {
+      console.log("defaultDropdownCallback", {dropdown, dropdownElement});
+      await setStorageWithProperty(dropdown, dropdownElement.value);
+    }
+
+    let dropdownCallbackFunction = dropdownDefaultCallback;
+    let dropdownCallbackSetting = get(settings, "dropdownCallback");
+
+    if (dropdownCallbackSetting) {
+      dropdownCallbackFunction = () => {
+        console.log("dropdownCallbackFunction", {dropdown, dropdownElement});
+        dropdownCallbackSetting(dropdown, dropdownElement, settings);
+      }
+    }
+
+    dropdownElement.addEventListener("change", dropdownCallbackFunction);
+
+    for (let option of dropdownElement.options) {
+      option.disabled = !element.checked;
+    }
+
+    dropdownElement.disabled = !element.checked;
+  }
+
+  console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
+
+  return element;
 }
 
 export async function onLoad() {
@@ -343,14 +450,16 @@ export async function onLoad() {
   }
 
   await setupOptionsListenerById("OpenInNewTab", { disabled: false });
-  await setupOptionsListenerById("AutoRedirectOnLoad", { disabled: false });
-  await setupOptionsListenerById("AutoRedirectOnCopyPrompt", { disabled: true });
-  await setupOptionsListenerById("ReadWriteAll", { disabled: true });
-  await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonExtension });
+  await setupOptionsListenerById("AutoRedirectOnLoadStatus", { disabled: false, dropdownDefault: "local" });
+  await setupOptionsListenerById("AutoRedirectOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
+  await setupOptionsListenerById("AutoRedirectOnCopyPastePrompt", { disabled: true });
+  await setupOptionsListenerById("ReadWriteAll", { disabled: false, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
+  await setupOptionsListenerById("OauthApp", { disabled: true, callback: ifTrueThenInitializeMastodonExtension });
   await setupOptionsListenerById("UpdateStats", { disabled: true });
   await setupOptionsListenerById("Following", { disabled: true });
   await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
   await setupOptionsListenerById("OnClickedReadWrite", { disabled: true });
+
   document.onkeypress = keyPress;
 }
 

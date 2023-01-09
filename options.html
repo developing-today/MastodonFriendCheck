@@ -29,6 +29,9 @@
       .note {
         margin-left: 2rem;
       }
+      .inner-note {
+        margin-left: 0rem;
+      }
       #instanceLabel {
         font-size: 120%;
         font-weight: bold;
@@ -45,8 +48,23 @@
       <div>
         Options:<br>
         <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false>Open In New Tab</input><br>
-        <input type="checkbox" class="options disabled" id="AutoRedirectOnLoad" name="AutoRedirectOnLoad" value=false>Auto-Redirect On-Load</input><br>
-        <input type="checkbox" class="options disabled" id="AutoRedirectOnCopyPrompt" name="AutoRedirectOnCopyPrompt" value=false>Auto-Redirect On Copy-Prompt</input><br>
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnCopyPastePrompt" name="AutoRedirectOnCopyPastePrompt" value=false>Auto-Redirect On-Load [copypaste-prompt]</input><br>
+
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnLoadAccount" name="AutoRedirectOnLoadAccount" value=false disabled=true>Auto-Redirect On-Load [account]</input><br>
+        <label class="note" for="AutoRedirectOnLoadAccountDropdown">When:</label>
+        <select class="inner-note" id="AutoRedirectOnLoadAccountDropdown" name="AutoRedirectOnLoadAccountDropdown" value=false disabled=true>
+          <option value="remote"disabled=true>Remote</option>
+          <option value="local" disabled=true>Local</option>
+          <option value="first-opened" disabled=true>First Opened</option>
+        </select><br>
+
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnLoadStatus" name="AutoRedirectOnLoadStatus" value=false disabled=true>Auto-Redirect On-Load [status]</input><br>
+        <label class="note" for="AutoRedirectOnLoadStatusDropdown">When:</label>
+        <select class="inner-note" id="AutoRedirectOnLoadStatusDropdown" name="AutoRedirectOnLoadStatusDropdown" value=false disabled=true>
+          <option value="local" disabled=true>Local</option>
+          <option value="remote" disabled=true>Remote</option>
+          <option value="first-opened" disabled=true>First Opened</option>
+        </select><br>
       </div>
       <div>
         Additional Features:<br>
