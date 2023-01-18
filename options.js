@@ -290,7 +290,8 @@ export async function ifTrueThenInitializeMastodonExtension(option, element, set
   }
   window.location.reload(); // comment out during development
 }
-
+// # todo setup oauth to contain url in settings and reuse indefinitely whnever getinstance matches
+// # todo setup urls for toggle to include more information, where it was called, tally of times called, tally of times toggle
 export async function onClicked() {
   let input = document.getElementById("instanceTextBox").value.trim();
 
@@ -298,6 +299,8 @@ export async function onClicked() {
     await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
     ).then(() => permissionGrantedInstance(input)
     ).catch(() => permissionDeniedInstance()
+    ).then(() => setOauthOption(false)
+
     ).then(() => setCurrentVersion());
 
     setStorageWithProperty("Instance", input);

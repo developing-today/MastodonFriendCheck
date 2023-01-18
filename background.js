@@ -5,7 +5,7 @@ export function versionWhichSignifiesFirstRunIsNeeded() {
 }
 
 export function get(object, property, settings) {
-  console.log("get", { object, property, settings });
+  // console.log("get", { object, property, settings });
   let defaultValue = settings ?
     get(settings, "default") : null;
 
@@ -16,7 +16,7 @@ export function get(object, property, settings) {
       object[property] !== null
   let result = resultCond ? object[property] : defaultValue;
 
-  console.log("get", { resultCond, defaultValue, result });
+  // console.log("get", { resultCond, defaultValue, result });
   return result;
 }
 
@@ -31,8 +31,7 @@ export function getRedirectUri() {
 export async function getCurrentTab() {
   let queryOptions = {
     active: true,
-    lastFocusedWindow: true,
-    // url: chrome.permissions.getAll().origins
+    lastFocusedWindow: true
   };
   let [tab] = await chrome.tabs.query(queryOptions);
   console.log("currentTab", tab);
@@ -76,17 +75,29 @@ export function syncCacheWithStorage(keys) {
   return cache;
 }
 
-export async function getStorage(keys) {
-  // TODO: something about local storage?
+export async function getStorage(keys, settings) {
   let keysArray = Array.isArray(keys) ? keys : [keys];
 
   if (keysArray.every(value =>
         Object.keys(cache).includes(value))) {
-    // should i stop returning the whole cache?
-    return cache;
+
+    if (get(settings, "strict") === true) {
+      let result = {};
+      keysArray.forEach(key => result[key] = cache[key]);
+      return result;
+    } else {
+      return cache;
+    }
 
   } else {
-    return syncCacheWithStorage(); // TODO: perf testing?
+    if (get(settings, "strict") === true) {
+      await syncCacheWithStorage();
+      let result = {};
+      keysArray.forEach(key => result[key] = cache[key]);
+      return result;
+    } else {
+      return syncCacheWithStorage(); // TODO: perf testing?
+    }
   }
 }
 
@@ -177,16 +188,15 @@ export function makeHttps(url) {
 }
 
 export async function getInstance(settings) {
-  console.log("getInstance", settings, await getStorage());
+  let storage = await getStorage(["Instance", "InstanceHttps", "InstanceClean"]);
+  console.log("getInstance", settings, storage);
+
   if (get(settings, "clean")) {
-    return getStorage(["InstanceClean"]
-        ).then(result => get(result, "InstanceClean"));
-  } else if (get(settings,"noHttps")) {
-    return getStorage(["Instance"]
-        ).then(result => get(result,"Instance"));
+    return storage.InstanceClean;
+  } else if (get(settings, "noHttps")) {
+    return storage.Instance;
   } else {
-    return getStorage(["InstanceHttps"]
-        ).then(result => get(result, "InstanceHttps"));
+    return storage.InstanceHttps;
   }
 }
 
@@ -498,24 +508,56 @@ export async function toggleMastodonTab(tab, settings) {
     });
 }
 
-// TODO: for content script follow->following? stats?
-// export async function onMessage(message, sender, sendResponse) {
-//   if (message.type === "getStorage") {
-//     await getStorage(message.keys).then(result => {
-//       sendResponse(result);
-//     });
-//     return true;
-//   } else if (message.type === "setStorage") {
-//     await setStorage(message.data).then(result => {
-//       sendResponse(result);
-//     });
-//     return true;
-//   } else if (message.type === "toggleCurrentTab") {
-//     await toggleCurrentTab();
-//   } else if (message.type === "setOauthCode") {
-//     await setOauthCode();
-//   }
-// } // TODO sendResponse
+export async function sendResponseToTab(tabId, response) {
+  return chrome.tabs.sendMessage(tabId, response);
+}
+
+export async function onMessage(message, sender, sendResponse) {
+  if (Array.isArray(message)) {
+    return Promise.all(message.map(m => onMessage(m, sender, sendResponse)));
+  }
+
+  let response = {};
+
+  if (message.timestamp) {
+
+    if (message.group) {
+      Object.assign(response, { group: message.group, timestamp: message.timestamp });
+
+    } else {
+      Object.assign(response, { timestamp: message.timestamp });
+    }
+  }
+
+  if (message.messageType) {
+    Object.assign(response, { messageType: message.messageType });
+  }
+
+  Object.assign(response, { message: {}, parent: { message: {}, sender: {}, sendResponse: {} } });
+  Object.assign(response.message, message);
+  Object.assign(response.parent.message, message);
+  Object.assign(response.parent.sender, sender);
+  Object.assign(response.parent.sendResponse, sendResponse);
+
+  console.log("onMessage", message, sender, sendResponse, response);
+
+  if (message.messageType == "getStorage") {
+    Object.assign(response.message, await getStorage(message.keys));
+    return sendResponseToTab(sender.tab.id, response);
+
+  } else if (message.messageType == "setStorage") {
+    await setStorage(message);
+    return Promise.resolve();
+
+  } else if (message.messageType == "toggleMastodonUrl") {
+    Object.assign(response.message, await toggleMastodonUrl(sender.url, {status: "onMessage"}));
+    return sendResponseToTab(sender.tab.id, response);
+
+  } else {
+    console.log("onMessage", "Unknown message type", message.messageType, message);
+    return Promise.resolve();
+  }
+}
 
 export function onAlarm(alarm) {
   if (alarm.name === "syncCacheWithStorage") {
@@ -532,6 +574,19 @@ export async function onInstalled(reason) {
     "onClicked",
     "onClicked,noInstance"
   ].includes(reason)) {
+    chrome.contextMenus.create({
+      "id": "context",
+      "title": "Toggle Page",
+      "contexts": ["all"]
+    });
+
+    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+      console.log("contextMenus.onClicked", info, tab);
+      if (info.menuItemId == "context") {
+        await toggleMastodonTab(tab, {status: "onClicked"});
+      }
+    });
+
     console.log("onInstalled", "syncCacheWithStorage");
     await syncCacheWithStorage();
     if (
@@ -824,6 +879,18 @@ chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 60});
 chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.runtime.onInstalled.addListener(onInstalled);
+chrome.runtime.onMessage.addListener(onMessage);
+
+chrome.scripting.registerContentScripts([{
+  id: "contents",
+  js: ["content.js"],
+  matches: [
+    "*://*/@*",
+    "*://*/users/*",
+    "*://*/web/statuses/*"
+  ],
+  runAt: "document_idle"
+}]);
 
 chrome.storage.onChanged.addListener(onChanged);
 
