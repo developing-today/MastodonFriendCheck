@@ -1,29 +1,25 @@
 {
-"update_url": "https://clients2.google.com/service/update2/crx",
-
-  "manifest_version": 2,
+  "manifest_version": 3,
+  "version": "0.8.0",
   "name": "Mastodon Friend Checker",
   "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
-  "version": "0.1.0",
-  "browser_action": {
-    "default_icon": "icon.png",
-    "default_popup": "popup.html"
+  "homepage_url": "https://src.developing.today/MastodonFriendChecker",
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "permissions": ["activeTab", "alarms", "scripting", "storage"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_icon":  "icon.png",
+    "default_title": "jump"
   },
   "background": {
-    "scripts": ["background.js"]
+    "service_worker": "background.js",
+    "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://*/@*"],
-      "js": ["content.js"],
-      "run_at": "document_end"
-    }
-  ], 
-  "permissions": [
-    "activeTab",
-    "https://*/",
-    "storage"
-  ],
-  "icons": { "16": "icon16.png",
-            "128": "icon128.png" }
+  "options_ui": {
+    "page": "options.html"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "128": "icon128.png"
+  }
 }
