@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <head>
+    <script type="module" src="./options.js"></script>
+    <title>Mastodon Friend Checker</title>
+    <style>
+      body {
+      	text-align: center;
+        font-family: "Segoe UI", "Lucida Grande", Tahoma, sans-serif;
+        font-size: 60%;
+      }
+      div.optionsBox {
+        text-align: left;
+        margin-left: 20%;
+        margin-right: 20%;
+      }
+      .disabled {
+        pointer-events: none;
+        opacity: 0.3;
+      }
+      .enabled {
+        pointer-events: auto;
+        opacity: 1;
+      }
+      .options {
+        margin-left: 1rem;
+      }
+      .note {
+        margin-left: 2rem;
+      }
+      .inner-note {
+        margin-left: 0rem;
+      }
+      #instanceLabel {
+        font-size: 120%;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <p>HELLO FRIEND!</p>
+    <label for="instanceTextBox">PLEASE ENTER OR UPDATE YOUR INSTANCE NAME:</label>
+    <p id="instanceLabel">Example: "mastodon.social"</p>
+    <input type="text" name="textbox" id="instanceTextBox" value=""/>
+    <input type="submit" type="button" name="button" id="submitButton" value="Refresh!" />
+    <div class="optionsBox">
+      <div>
+        Options:<br>
+        <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false>Open In New Tab</input><br>
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnCopyPastePrompt" name="AutoRedirectOnCopyPastePrompt" value=false>Auto-Redirect On-Load [copypaste-prompt]</input><br>
+
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnLoadAccount" name="AutoRedirectOnLoadAccount" value=false disabled=true>Auto-Redirect On-Load [account]</input><br>
+        <label class="note" for="AutoRedirectOnLoadAccountDropdown">When:</label>
+        <select class="inner-note" id="AutoRedirectOnLoadAccountDropdown" name="AutoRedirectOnLoadAccountDropdown" value=false disabled=true>
+          <option value="remote"disabled=true>Remote</option>
+          <option value="local" disabled=true>Local</option>
+          <option value="first-opened" disabled=true>First Opened</option>
+        </select><br>
+
+        <input type="checkbox" class="options disabled" id="AutoRedirectOnLoadStatus" name="AutoRedirectOnLoadStatus" value=false disabled=true>Auto-Redirect On-Load [status]</input><br>
+        <label class="note" for="AutoRedirectOnLoadStatusDropdown">When:</label>
+        <select class="inner-note" id="AutoRedirectOnLoadStatusDropdown" name="AutoRedirectOnLoadStatusDropdown" value=false disabled=true>
+          <option value="local" disabled=true>Local</option>
+          <option value="remote" disabled=true>Remote</option>
+          <option value="first-opened" disabled=true>First Opened</option>
+        </select><br>
+      </div>
+      <div>
+        Additional Features:<br>
+        <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false>Grant Read-Write[all-url] (popup on-check)</input><br>
+        <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false>Grant OAuth (url will open on-check)</input><br>
+        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false>Update Post Stats[requires::read-write]</input><br>
+        <input type="checkbox" class="options disabled" id="Following" name="Following" value=false>Follow>Following[requires::oauth,read-write]</input><br>
+      </div>
+      <div>
+        On Extension Button Click:<br>
+        <input type="checkbox" class="options disabled" id="OnClickedToggle"  name="OnClickedToggle" value=false>Toggle Mastodon Page</input><br>
+        <input type="checkbox" class="options disabled" id="OnClickedReadWrite"  name="OnClickedReadWrite" value=false>Request Grant Read-Write[per-site]</input><br>
+        <div class="note">(fyi: all-url is preferred over per-site)</div>
+      </div>
+    </div>
+  </body>
+</html>
