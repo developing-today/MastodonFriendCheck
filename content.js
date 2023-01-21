@@ -1,12 +1,12 @@
 let cache = {};
 
-async function sendMessageToBackground(message, timestamp) {
+async function sendMessage(message, timestamp) {
 
   if (Array.isArray(message)) {
-    return Promise.all(message.map((message) => sendMessageToBackground(message, timestamp)));
+    return Promise.all(message.map((message) => sendMessage(message, timestamp)));
   }
 
-  let messageObject = { message };
+  let messageObject = { content: message };
 
   if (timestamp) {
 
@@ -18,15 +18,15 @@ async function sendMessageToBackground(message, timestamp) {
     }
   }
 
-  if (message.messageType) {
-    Object.assign(messageObject, { messageType: message.messageType });
+  if (message.type) {
+    Object.assign(messageObject, { type: message.type });
   }
 
   return chrome.runtime.sendMessage(messageObject);
 }
 
 async function updateCache(message) {
-  Object.assign(cache, message.message);
+  Object.assign(cache, message.content);
   // console.log("content.js", "cache updated", message, cache);
   return Promise.resolve();
 }
@@ -35,7 +35,10 @@ function getCallbackTimestamp(group, callback) {
   let timestamp = Date.now();
   let object = cache;
   if (group) {
-    if (cache[group] === undefined || cache[group] === null || typeof cache[group] !== "object" || Array.isArray(cache[group])) {
+    if (cache[group] === undefined ||
+      cache[group] === null ||
+      typeof cache[group] !== "object" ||
+      Array.isArray(cache[group])) {
       cache[group] = {};
     }
     object = cache[group];
@@ -80,10 +83,10 @@ async function onMessageCallback(message) {
   return Promise.resolve();
 }
 
-async function onMessageFromBackground(message) {
+async function onMessage(message) {
   // console.log("content.js", "got message", message);
   if (Array.isArray(message)) {
-    return Promise.all(message.map(onMessageFromBackground));
+    return Promise.all(message.map(onMessage));
   }
 
   if (message.timestamp) {
@@ -104,7 +107,7 @@ async function onMessageFromBackground(message) {
     }
   }
 
-  if (message.messageType === "updateCache") {
+  if (message.type === "updateCache") {
     return updateCache(message);
   } else {
     // console.log("content.js", "unknown message type", message, cache);
@@ -112,105 +115,79 @@ async function onMessageFromBackground(message) {
   }
 }
 
-chrome.runtime.onMessage.addListener(onMessageFromBackground);
+chrome.runtime.onMessage.addListener(onMessage);
 
-sendMessageToBackground({
-  messageType: "getStorage",
-  keys: ["Instance"]
-}, getCallbackTimestamp("getInstance", (result) => {
-    console.log("content.js", "getInstance", result.message.Instance, result);
-}));
+function fixFollowButton(followButton, href) {
+  let followButtonLink = document.createElement("a");
+  followButtonLink.href = href;
 
-// console.log("content.js", "cache", cache);
-// console.log("content.js", "loaded");
+  followButtonLink.innerHTML = "Following";
 
-/*
-following
-  this is done using messages between here and the service worker background.js
+  followButton.classList.forEach((className) => {
+    followButtonLink.classList.add(className);
+  })
+  followButton.innerHTML = followButtonLink.outerHTML;
 
-  on-page load:
-    service worker sees page is loaded, it:
-  1. Get the current URL
-  2. Determine if the URL is a mastodon page, else return
-  3. Determine if it's a profile page, else return
-  4. Determine if it's a remote profile page, else return
-     4.1 must be remote, because local profiles would already have follow status
-  5. Get the profile handle from the url
+  followButton.addEventListener("click", function(event) {
+    // console.log("content.js", "follow button clicked", event);
+    window.location.href = href;
+  });
+}
 
-  option 1
-  6. Search for the profile handle in the local database
-  8. if found, update follow->following on-page
-  8. if following, make 'following' button a link to local version of profile page
+function onLoad() {
+  // console.log("content.js", "onLoad", window.location.href);
+  sendMessage({
+    type: "getStorage",
+    keys: ["InstanceHttps", "InstanceClean", "follows"]
+  }, getCallbackTimestamp("getStorage", (result) => {
+      // console.log("content.js", "getStorage", result.content.InstanceHttps, result);
+      if (result.parent.sender.url) {
+        let url = new URL(result.parent.sender.url);
+        if (url.hostname == result.content.InstanceClean) {
+          // console.log("content.js", "on instance page");
 
-  option 2
-  6. [ already have a cache of all following handles ]
-  6.1. a cache may need account access to get the following list
-  7. check if handle is in cache
-  8. if found, update follow->following on-page
-  10. if following, make 'following' button a link to local version of profile page
+        } else {
+          // console.log("content.js", "not on instance page");
 
-  option 3
-  6. Search for the profile handle in the local database
-  7. if found, take the id from the account returned
-  8. check following status
-  9. if found, update follow->following on-page
-  10. if following, make 'following' button a link to local version of profile page
+          let instance = url.hostname.replace(url.protocol + "//", "");
+          let path = url.pathname.split("/").filter((item) => item !== "");
+          // console.log("content.js", "url", url, instance, path);
+          let handle = path[0];
 
+          if (handle.startsWith("@")) {
+            handle = handle.substring(1);
+          }
+          let handleSplit = handle.split("@");
 
-  on-click of the follow button, send a message to the service worker
-  1. Get the current URL
-  2. Determine if the URL is a mastodon page, else return
-  3. Determine if it's a profile page, else return
-  4. Determine if it's a remote profile page, else return
-  4.1 must be remote, because local profiles would already have follow status
-  5. Get the profile handle from the url
-  6. Search for the profile handle in the local database
-  7. if found, take the id from the account returned
-  9.1. update follow->following on-page
-  10.1. if following, make 'following' button a link to local version of profile page
+          if (handleSplit.length > 1) {
+            handle = handleSplit[0];
+            instance = handleSplit[1];
+          }
+          let account = handle + "@" + instance;
+          // console.log("content.js", "handle", handle, instance);
 
+          if (account in result.content.follows) {
+            // console.log("content.js", "following", account);
 
-*/
+            let buttonCheckInterval = setInterval(function() {
+              followButton = document.querySelector('.logo-button');
 
+              if (followButton) {
+                // console.log("content.js", "found follow button", followButton);
 
-/*
-stats
-  this is done using messages between here and the service worker background.js
+                clearInterval(buttonCheckInterval);
 
-  1. Get the current URL
-  2. Determine if the URL is a mastodon page, else return
-    2.1. Determine if it's a status, it must be a status.
-         2.1.1 running these searchs on every post in the feed is infeasiable.
-  3. If URL is local,
-    3.1. If post is local to local, nothing to do, return.
-    3.2. If post is local to remote,
-      3.2.1. Get the post ID
-      3.2.2. Search for the post ID in the local database
-      3.2.3. Take url from returned status
-      3.2.4. get post id from url
-      3.2.5. search for post id in remote url
-      3.2.6. If found, return stats
-      3.2.7. update page
-  4. If URL is remote,
-    If post is local to the given remote, nothing to do, return.
-    If post is remote to remote,
-      4.1. Get the post ID
-      4.2 search for the post ID in the local database
-      4.3 Take url from returned status
-      4.4 get post id from url
-      4.5 search for post id in remote url
-      4.6 If found, return stats
-      4.7 update page
-*/
+                let localProfile = result.content.InstanceHttps + "@" + account;
+                fixFollowButton(followButton, localProfile);
+              }
+            }, 50);
+          } else {
+            // console.log("content.js", "not following", account);
+          }
+          // # todo move all to worker then send message back? only js for changes in content.js?
+        }
+      }
+  }));
+}
 
-/*
-links
-  TODO:
-  - make setting for each below
-  - when link like "@jack@twitter.com"
-     - make it into a hyperlink to https://twitter.com/jack
-  - make profile links click to original page
-  - make profile handle a link to profile page
-    - if local, link to original
-    - if remote, link to local
-*/
+onLoad();

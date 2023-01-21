@@ -15,6 +15,17 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/@*",
+        "*://*/users/*",
+        "*://*/web/statuses/*"
+      ],
+      "js": ["content.js"],
+      "runAt": "document_start"
+    }
+  ],
   "options_ui": {
     "page": "options.html"
   },

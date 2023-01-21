@@ -529,32 +529,32 @@ export async function onMessage(message, sender, sendResponse) {
     }
   }
 
-  if (message.messageType) {
-    Object.assign(response, { messageType: message.messageType });
+  if (message.type) {
+    Object.assign(response, { type: message.type });
   }
 
-  Object.assign(response, { message: {}, parent: { message: {}, sender: {}, sendResponse: {} } });
-  Object.assign(response.message, message);
+  Object.assign(response, { content: {}, parent: { message: {}, sender: {}, sendResponse: {} } });
+  Object.assign(response.content, message);
   Object.assign(response.parent.message, message);
   Object.assign(response.parent.sender, sender);
   Object.assign(response.parent.sendResponse, sendResponse);
 
   console.log("onMessage", message, sender, sendResponse, response);
 
-  if (message.messageType == "getStorage") {
-    Object.assign(response.message, await getStorage(message.keys));
+  if (message.type == "getStorage") {
+    Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
     return sendResponseToTab(sender.tab.id, response);
 
-  } else if (message.messageType == "setStorage") {
+  } else if (message.type == "setStorage") {
     await setStorage(message);
     return Promise.resolve();
 
-  } else if (message.messageType == "toggleMastodonUrl") {
+  } else if (message.type == "toggleMastodonUrl") {
     Object.assign(response.message, await toggleMastodonUrl(sender.url, {status: "onMessage"}));
     return sendResponseToTab(sender.tab.id, response);
 
   } else {
-    console.log("onMessage", "Unknown message type", message.messageType, message);
+    console.log("onMessage", "Unknown message type", message.type, message);
     return Promise.resolve();
   }
 }
@@ -880,17 +880,6 @@ chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.runtime.onMessage.addListener(onMessage);
-
-chrome.scripting.registerContentScripts([{
-  id: "contents",
-  js: ["content.js"],
-  matches: [
-    "*://*/@*",
-    "*://*/users/*",
-    "*://*/web/statuses/*"
-  ],
-  runAt: "document_idle"
-}]);
 
 chrome.storage.onChanged.addListener(onChanged);
 
