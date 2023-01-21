@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "version": "0.9.0",
+  "name": "Mastodon Friend Checker",
+  "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
+  "homepage_url": "https://src.developing.today/MastodonFriendChecker",
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "permissions": ["activeTab", "alarms", "scripting", "storage", "contextMenus"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_icon":  "icon.png",
+    "default_title": "Toggle Mastodon Page\n🐘 🐘 Jump Now  🐘"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "toggle": {
+      "suggested_key": {
+        "default": "Alt+J"
+      },
+      "description": "Toggle/Jump Mastodon Page"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/@*",
+        "*://*/users/*",
+        "*://*/web/statuses/*"
+      ],
+      "js": ["content.js"],
+      "runAt": "document_start"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "128": "icon128.png"
+  }
+}
