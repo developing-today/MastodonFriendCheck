@@ -25,10 +25,10 @@ async function sendMessage(message, timestamp) {
   }
 
   if (!messageObject.type) {
-    console.log("content.js", "no message type", messageObject);
+    // console.log("content.js", "no message type", messageObject);
   }
 
-  console.log("content.js", "sending message", messageObject);
+  // console.log("content.js", "sending message", messageObject);
 
   return chrome.runtime.sendMessage(messageObject);
 }
@@ -56,23 +56,23 @@ function getCallbackTimestamp(group, callback) {
   }
 
   object[timestamp].callback = callback ? callback : function(result) {
-    console.log("content.js", "got result", result);
+    // console.log("content.js", "got result", result);
   }
 
   if (group) {
     Object.assign(cache[group], object);
-    cache[group].counter++;
-    cache.counter++;
+    // cache[group].counter++;
+    // cache.counter++;
     return {group, timestamp};
   } else {
     Object.assign(cache, object);
-    cache.counter++;
+    // cache.counter++;
     return {timestamp};
   }
 }
 
 async function onMessage(message) {
-  console.log("content.js", "got message", message);
+  // console.log("content.js", "got message", message);
   if (Array.isArray(message)) {
     return Promise.allSettled(message.map(onMessage));
   }
@@ -81,7 +81,7 @@ async function onMessage(message) {
     if (message.type === "echoRequest") {
       sendMessage({ type: "echoResponse", content: message.content });
     } else {
-      console.log("content.js", "no message type found", message);
+      // console.log("content.js", "no message type found", message);
     }
   }
 
@@ -99,7 +99,7 @@ async function onMessage(message) {
     ) {
       await cache[message.timestamp].callback(message);
     } else {
-      console.log("content.js", "no callback for message", message);
+      // console.log("content.js", "no callback for message", message);
     }
   }
 
@@ -107,7 +107,7 @@ async function onMessage(message) {
 }
 
 function fixFollowButton(button, url) {
-  console.log("content.js", "fixing follow button", button, url);
+  // console.log("content.js", "fixing follow button", button, url);
   let buttonA = document.createElement("a");
   buttonA.href = url;
 
@@ -119,19 +119,19 @@ function fixFollowButton(button, url) {
   button.innerHTML = buttonA.outerHTML;
 
   button.addEventListener("click", function(event) {
-    console.log("content.js", "follow button clicked", event);
+    // console.log("content.js", "follow button clicked", event);
     window.open(url, "_self");
   });
 }
 
 async function onLoad() {
-  console.log("content.js", "onLoad", window.location.href);
+  // console.log("content.js", "onLoad", window.location.href);
   await sendMessage(
     { type: "onLoad" }, // if url issues, send location href as url property ?
     getCallbackTimestamp(
       "onLoad",
       async (result) => {
-        console.log("content.js", "got onLoad result", result);
+        // console.log("content.js", "got onLoad result", result);
 
         let onLoadClosure = async (innerResult) => {
           let type = innerResult.type;
@@ -139,33 +139,33 @@ async function onLoad() {
 
           if (type && url) {
             if (type === "jump") {
-              console.log("content.js", "jump", url);
+              // console.log("content.js", "jump", url);
               window.open(url, "_self");
             } else if (type === "following") {
-              console.log("content.js", "following", url);
+              // console.log("content.js", "following", url);
 
               let timeNow = Date.now();
               let buttonCheckInterval = setInterval(function() {
                 button = document.querySelector('.logo-button');
 
                 if (button) {
-                  console.log("content.js", "found follow button", button);
+                  // console.log("content.js", "found follow button", button);
                   clearInterval(buttonCheckInterval);
                   fixFollowButton(button, url);
                 }
 
                 if (Date.now() - timeNow > (15 * 1000)) {
-                  console.log("content.js", "follow button not found");
+                  // console.log("content.js", "follow button not found");
                   clearInterval(buttonCheckInterval);
                 }
               }, 50);
             } else {
-              console.log("content.js", "no url type found", { type, url, result });
+              // console.log("content.js", "no url type found", { type, url, result });
             }
           } else if (type) {
-            console.log("content.js", "no url", { type, url, result });
+            // console.log("content.js", "no url", { type, url, result });
           } else {
-            console.log("content.js", "no type", { type, url, result });
+            // console.log("content.js", "no type", { type, url, result });
           }
         };
 
