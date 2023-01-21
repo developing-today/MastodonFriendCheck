@@ -1003,15 +1003,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-chrome.commands.onCommand.addListener(async (command, tab) => {
-  // console.log("commands.onCommand", { command, tab });
-  if (command == "toggle") {
-    await onClicked(tab);
-  } else {
-    // console.log("commands.onCommand", "Unknown command", command);
-  }
-});
-
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.runtime.onMessage.addListener(onMessage);
 
