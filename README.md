@@ -111,4 +111,97 @@ https://mastodon.social/api/v1/accounts/109512940238834674/statuses?exclude_repl
 
 */
 
+
+/*
+// todo:
+
+----
+
+code redirects based on url
+
+but it can overwhelm api limits
+
+oauth is setup
+but access token is untested
+and 'follow' and 'list following' logic is not implemented
+
+popup moved to options
+but action button is unused sofar
+
+need to add options
+jump
+  - autojump
+  - jump on copypaste
+  - manual jump
+follow
+  - following when following
+  - follow button works
+- new tab or update current_tab
+  - must fix update current tab
+
+improve caching
+  cache all url translations ? both ways?
+  cache timing / max search calls per minute ___
+
+
+improve and guarantee tab updates happen in correct window or otherwise always in a new tab.
+maybe close current activetab, then open new tab
+but that might scare a user and be unreliable
+
+
+does following list need private access?
+
+create tab vs new tab
+
+
+----
+
+
+follow
+following
+follower
+blocked
+muted
+mutuals
+
+[[2023-01-02 Monday]][[z/2023/01/02]]
+<enable extended access for all tabs>
+  - you give chaos goblin power? <confirm>
+  - fix original page following button as above
+    - needs * host permission for content script
+    - may need or be easier with oauth for original instance for api
+    - may need oauth scope read:follows, read:blocks, read:mutes
+  - if you click a link from local mastodon, the numbers are updated to = original page
+    - needs * host permission for cors
+    - needs fetch to query original instance
+  - allow follow button to be clicked and work
+    - needs * host permission for content script
+    - needs fetch to query original instance
+    - needs oauth for original instance for api
+    - needs oauth scope write:follows
+
+
+-----
+
+
+move oauth app config into settings page separte from initial app
+
+phases
+0 no config
+1 config mastodon instance, gaet chrome host for instance
+  - user must grant permissions
+2 config oauth app for instance, get oauth client id and secret,
+  - user must grant permissions for oauth app
+3 get token
+  - user will see redirect url before extension redirects
+
+is there a change scope path without full oauth rebuild?
+will dev today actually have to host oauth app?
+
+
+-----
+
+TODO: if handle, add to app name, add isodate
+*/
+
 ```

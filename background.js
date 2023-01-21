@@ -5,7 +5,7 @@ export function versionWhichSignifiesFirstRunIsNeeded() {
 }
 
 export function get(object, property, settings) {
-  console.log("get", { object, property, settings });
+  // console.log("get", { object, property, settings });
   let defaultValue = settings ?
     get(settings, "default") : null;
 
@@ -16,7 +16,7 @@ export function get(object, property, settings) {
       object[property] !== null
   let result = resultCond ? object[property] : defaultValue;
 
-  console.log("get", { resultCond, defaultValue, result });
+  // console.log("get", { resultCond, defaultValue, result });
   return result;
 }
 
@@ -47,10 +47,11 @@ export function sendResultsToCache(results, settings) {
   Object.assign(cache, results);
 
   if (namespace) {
-    let storage = get(cache, namespace, { default: {} });
+    let storage = get(cache, namespace, { default: { counter: 0 } });
     Object.assign(storage, results);
     cache[namespace] = storage;
     cache[namespace]["lastSyncFull"] = new Date();
+    cache[namespace].counter++;
   }
 
   if (cache.lastUrls) {
@@ -63,6 +64,7 @@ export function sendResultsToCache(results, settings) {
 }
 
 export function syncCacheWithStorage(keys) {
+
   chrome.storage.sync.get(
       ).then(results=>
         sendResultsToCache(
@@ -77,6 +79,7 @@ export function syncCacheWithStorage(keys) {
   cache["lastSyncFull"] = new Date();
   cache.counter++;
   console.log("syncCacheWithStorage", cache);
+
   return cache;
 }
 
@@ -111,7 +114,7 @@ export async function getStorageProperty(name) {
     name = name[0];
   }
   let result = await getStorage(name);
-  console.log("getStorageProperty", {name, result});
+  // console.log("getStorageProperty", {name, result});
   return result[name];
 }
 
@@ -150,9 +153,16 @@ export async function getStorageVersion() {
 
 export async function setStorage(object, settings) {
   // TODO:   if(chrome.runtime.lastError) {
+  Object.assign(cache, object);
+  cache.lastSyncPartial = new Date();
+  cache.counter++;
+  // console.log("setStorage", cache);
+
   if (get(settings, "local")) {
+    // console.log("setStorage local", object);
     return chrome.storage.local.set(object);
   } else {
+    // console.log("setStorage sync", object);
     return chrome.storage.sync.set(object);
   }
 }
@@ -194,7 +204,7 @@ export function makeHttps(url) {
 
 export async function getInstance(settings) {
   let storage = await getStorage(["Instance", "InstanceHttps", "InstanceClean"]);
-  console.log("getInstance", settings, storage);
+  console.log("getInstance", { settings, storage});
 
   if (get(settings, "clean")) {
     return storage.InstanceClean;
@@ -482,7 +492,7 @@ export async function toggleMastodonTab(tab, settings) {
         return;
       }
       let url = get(result, "url");
-      console.log("toggleMastodonUrl", "pending redirect", url);
+      console.log("toggleMastodonUrl", "pending jump", url);
 
       if (
         url &&
@@ -508,7 +518,7 @@ export async function toggleMastodonTab(tab, settings) {
         return sendUrlToTab(url);
 
       } else {
-        console.log("toggleMastodonTab: no redirect", { url });
+        console.log("toggleMastodonTab: no jump", { url });
       }
     });
 }
@@ -548,7 +558,11 @@ function filterObject(obj, callback) {
 export async function onChanged(changes, namespace) {
   console.log("onChanged", { changes, namespace, cache, storage: await getStorage() });
 
+  if (!cache.follows) {
+    await syncLocalWithFollowsCsv();
+  }
   await syncCacheWithStorage();
+  // todo
   // for (let key in changes) {
   //   let storageChange = changes[key];
   //   cache[key] = storageChange.newValue;
@@ -564,22 +578,34 @@ export async function onChanged(changes, namespace) {
 };
 
 export async function syncLocalWithFollowsCsv() {
+  console.log("syncLocalWithFollowsCsv");
   let instance = await getInstance();
+  console.log("syncLocalWithFollowsCsv", instance);
+  console.log("syncLocalWithFollowsCsv", cache);
+  console.log("syncLocalWithFollowsCsv", await getStorage());
   if (instance) {
+    console.log("syncLocalWithFollowsCsv", instance);
     return fetch(instance + "settings/exports/follows.csv")
     .then(response => response.text()).then(text => {
-      let data = {};
+      console.log("syncLocalWithFollowsCsv text", text);
+      let content = {};
       let lines = text.split("\n");
       lines.slice(1).map(line => {
         let account = line.split(",")[
           lines[0].split(",").indexOf("Account address")];
         if (account) {
-          data[account] = true;
+          content[account] = true;
         }
       });
-      console.log("syncLocalWithFollowsCsv", data);
-      return setStorage({ follows: data }, { local: true });
+      let timestamp = new Date();
+      let follows = { timestamp, content };
+      console.log("syncLocalWithFollowsCsv content", follows);
+      cache.follows = follows;
+
+      return setStorage({ follows }, { local: true });
     });
+  } else {
+    console.log("syncLocalWithFollowsCsv", "no instance");
   }
 }
 
@@ -678,14 +704,14 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
           let locality = "local";
 
-          let redirectStatus = await getStorageProperty("AutoRedirectOnLoadStatus");
-          let statusDropdown = await getStorageProperty("AutoRedirectOnLoadStatusDropdown");
-          let statusDropdownMatches = redirectStatus && statusDropdown &&
+          let jumpStatus = await getStorageProperty("AutoJumpOnLoadStatus");
+          let statusDropdown = await getStorageProperty("AutoJumpOnLoadStatusDropdown");
+          let statusDropdownMatches = jumpStatus && statusDropdown &&
                     (statusDropdown == "first-opened" || locality.startsWith(statusDropdown));
 
-          let redirectAccount = await getStorageProperty("AutoRedirectOnLoadAccount");
-          let accountDropdown = await getStorageProperty("AutoRedirectOnLoadAccountDropdown");
-          let accountDropdownMatches = redirectAccount && accountDropdown &&
+          let jumpAccount = await getStorageProperty("AutoJumpOnLoadAccount");
+          let accountDropdown = await getStorageProperty("AutoJumpOnLoadAccountDropdown");
+          let accountDropdownMatches = jumpAccount && accountDropdown &&
                     (accountDropdown == "first-opened" || locality.startsWith(accountDropdown));
 
           let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
@@ -717,14 +743,14 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
         let locality = "remote";
 
-        let redirectStatus = await getStorageProperty("AutoRedirectOnLoadStatus");
-        let statusDropdown = await getStorageProperty("AutoRedirectOnLoadStatusDropdown");
-        let statusDropdownMatches = redirectStatus && statusDropdown &&
+        let jumpStatus = await getStorageProperty("AutoJumpOnLoadStatus");
+        let statusDropdown = await getStorageProperty("AutoJumpOnLoadStatusDropdown");
+        let statusDropdownMatches = jumpStatus && statusDropdown &&
                   (statusDropdown == "first-opened" || locality.startsWith(statusDropdown));
 
-        let redirectAccount = await getStorageProperty("AutoRedirectOnLoadAccount");
-        let accountDropdown = await getStorageProperty("AutoRedirectOnLoadAccountDropdown");
-        let accountDropdownMatches = redirectAccount && accountDropdown &&
+        let jumpAccount = await getStorageProperty("AutoJumpOnLoadAccount");
+        let accountDropdown = await getStorageProperty("AutoJumpOnLoadAccountDropdown");
+        let accountDropdownMatches = jumpAccount && accountDropdown &&
                   (accountDropdown == "first-opened" || locality.startsWith(accountDropdown));
 
         let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
@@ -805,7 +831,7 @@ async function syncContextMenus() {
   await chrome.contextMenus.removeAll();
   await chrome.contextMenus.create({
     "id": "context",
-    "title": "Toggle Page",
+    "title": "Toggle Mastodon Page 🐘 Jump Now",
     "documentUrlPatterns": [
       "*://*/@*",
       "*://*/users/*",
@@ -814,10 +840,10 @@ async function syncContextMenus() {
   });
 }
 
-async function checkFollows(url) {
+async function checkFollows(url, settings) {
   let keys = ["InstanceHttps", "InstanceClean", "follows"];
   let result = await getStorage(keys);
-  console.log("content.js", "getStorage", result.InstanceHttps, result);
+  console.log("content.js", "checkFollows", result.InstanceHttps, result);
 
   if (url && result && keys.every((key) => key in result)) {
     url = new URL(url);
@@ -843,12 +869,28 @@ async function checkFollows(url) {
         instance = handleSplit[1];
       }
       let account = handle + "@" + instance;
-      console.log("content.js", "handle", handle, instance);
+      console.log("content.js", "handle", {handle, instance, result, cache});
 
-      return account in result.follows ? (result.InstanceHttps + "@" + account) : null;
+      if (account in result.follows.content) {
+        console.log("content.js", "account in follows", account);
+        return result.InstanceHttps + "@" + account;
+      } else {
+        console.log("content.js", "account not in follows", account, result.follows);
+
+        if (Date.now() - result.follows.timestamp > 1000 * 60) {
+          console.log("content.js", "follows is too old", result.follows.timestamp);
+          await syncLocalWithFollowsCsv();
+          if (account in result.follows.content) {
+            console.log("content.js", "account in follows now", account);
+            return result.InstanceHttps + "@" + account;
+          }
+        }
+      }
     }
-  } else {
+  } else if (!get(settings, "noSync")) {
     console.log("content.js", "invalid", { result, keys, url });
+    await syncLocalWithFollowsCsv();
+    checkFollows(url, { noSync: true });
   }
 }
 
@@ -928,6 +970,8 @@ export async function onMessage(message, sender, sendResponse) {
 
   } else if (message.type == "echoRequest") {
     sendMessage(sender.tab.id, response, { type: "echoResponse" });
+  } else if (message.type == "syncLocalWithFollowsCsv") {
+    syncLocalWithFollowsCsv();
   } else {
     console.log("onMessage", "Unknown message type", message.type, message);
   }
@@ -935,6 +979,7 @@ export async function onMessage(message, sender, sendResponse) {
 }
 
 export function onAlarm(alarm) {
+  console.log("onAlarm", alarm);
   if (alarm.name === "syncCacheWithStorage") {
     syncCacheWithStorage();
   } else if (alarm.name === "syncLocalWithFollowsCsv") {
@@ -945,13 +990,13 @@ export function onAlarm(alarm) {
 chrome.action.onClicked.addListener(onClicked);
 
 chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 5});
-chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 60});
+chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 1});
 chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   console.log("contextMenus.onClicked", info, tab);
   if (info.menuItemId == "context") {
-    await toggleMastodonTab(tab, {status: "onClicked"});
+    await onClicked(tab);
   }
 });
 
@@ -962,97 +1007,16 @@ chrome.storage.onChanged.addListener(onChanged);
 
 chrome.tabs.onUpdated.addListener(onUpdated);
 
-syncCacheWithStorage();
-syncContextMenus();
+console.log("background.js", "loaded");
 
-/*
-// todo:
+(() => (async () => {
+    console.log("background.js", "syncing.");
+    await syncContextMenus();
+    console.log("background.js", "synced context menus");
+    await syncLocalWithFollowsCsv();
+    console.log("background.js", "synced local with follows csv");
+    await syncCacheWithStorage();
+    console.log("background.js", "synced cache with storage");
+  })())();
 
-----
-
-code redirects based on url
-
-but it can overwhelm api limits
-
-oauth is setup
-but access token is untested
-and 'follow' and 'list following' logic is not implemented
-
-popup moved to options
-but action button is unused sofar
-
-need to add options
-jump
-  - autojump
-  - jump on copypaste
-  - manual jump
-follow
-  - following when following
-  - follow button works
-- new tab or update current_tab
-  - must fix update current tab
-
-improve caching
-  cache all url translations ? both ways?
-  cache timing / max search calls per minute ___
-
-
-improve and guarantee tab updates happen in correct window or otherwise always in a new tab.
-maybe close current activetab, then open new tab
-but that might scare a user and be unreliable
-
-
-does following list need private access?
-
-create tab vs new tab
-
-
-----
-
-
-follow
-following
-follower
-blocked
-muted
-mutuals
-
-[[2023-01-02 Monday]][[z/2023/01/02]]
-<enable extended access for all tabs>
-  - you give chaos goblin power? <confirm>
-  - fix original page following button as above
-    - needs * host permission for content script
-    - may need or be easier with oauth for original instance for api
-    - may need oauth scope read:follows, read:blocks, read:mutes
-  - if you click a link from local mastodon, the numbers are updated to = original page
-    - needs * host permission for cors
-    - needs fetch to query original instance
-  - allow follow button to be clicked and work
-    - needs * host permission for content script
-    - needs fetch to query original instance
-    - needs oauth for original instance for api
-    - needs oauth scope write:follows
-
-
------
-
-
-move oauth app config into settings page separte from initial app
-
-phases
-0 no config
-1 config mastodon instance, gaet chrome host for instance
-  - user must grant permissions
-2 config oauth app for instance, get oauth client id and secret,
-  - user must grant permissions for oauth app
-3 get token
-  - user will see redirect url before extension redirects
-
-is there a change scope path without full oauth rebuild?
-will dev today actually have to host oauth app?
-
-
------
-
-TODO: if handle, add to app name, add isodate
-*/
+console.log("background.js", "done");

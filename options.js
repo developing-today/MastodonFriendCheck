@@ -79,7 +79,11 @@ export function newTab(url) {
 }
 
 export async function getStorage(keys) {
-  return chrome.storage.sync.get(Array.isArray(keys) ? keys : [keys]);
+  let sync  = await chrome.storage.sync.get(Array.isArray(keys) ? keys : [keys]);
+  let local = await chrome.storage.local.get(Array.isArray(keys) ? keys : [keys]);
+  let result = {};
+  Object.assign(result, sync, local);
+  return result;
 }
 
 export async function getStorageProperty(name) {
@@ -194,18 +198,17 @@ export async function makeApp() {
 }
 
 export async function onResult() {
-  console.log("onResult");
-  let result = getStorage(["FollowingList", "Instance"])
+  let result = getStorage(["follows", "Instance"])
   console.log("onResult", { result });
 
   if (result.Instance) {
     let instanceLabel = result.Instance;
 
-    if (result.FollowingList) {
+    if (result.follows.content) {
 
-      if (result.FollowingList.length > 0) {
+      if (result.follows.content.keys().length > 0) {
         instanceLabel =
-          instanceLabel + "\n(" + result.FollowingList.length + ")";
+          instanceLabel + "\n(" + result.follows.content.keys().length + ")";
       }
     }
     document.getElementById("instanceLabel").innerHTML = instanceLabel;
@@ -413,7 +416,7 @@ export async function setupOptionsListenerById(option, settings) {
 
 export async function onLoad() {
   await getStorage([
-    "FollowingList",
+    "follows",
     "Instance",
     "PermissionDeniedInstance",
   ]).then(result => {
@@ -453,10 +456,10 @@ export async function onLoad() {
   }
 
   await setupOptionsListenerById("OpenInNewTab", { disabled: false });
-  await setupOptionsListenerById("AutoRedirectOnLoadStatus", { disabled: false, dropdownDefault: "local" });
-  await setupOptionsListenerById("AutoRedirectOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
-  await setupOptionsListenerById("AutoRedirectOnCopyPastePrompt", { disabled: true });
-  await setupOptionsListenerById("ReadWriteAll", { disabled: false, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
+  await setupOptionsListenerById("AutoJumpOnLoadStatus", { disabled: false, dropdownDefault: "local" });
+  await setupOptionsListenerById("AutoJumpOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
+  await setupOptionsListenerById("AutoJumpOnCopyPastePrompt", { disabled: true });
+  await setupOptionsListenerById("ReadWriteAll", { disabled: true, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
   await setupOptionsListenerById("OauthApp", { disabled: true, callback: ifTrueThenInitializeMastodonExtension });
   await setupOptionsListenerById("UpdateStats", { disabled: true });
   await setupOptionsListenerById("Following", { disabled: true });

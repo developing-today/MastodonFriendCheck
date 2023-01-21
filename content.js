@@ -80,6 +80,8 @@ async function onMessage(message) {
   if (message.type) {
     if (message.type === "echoRequest") {
       sendMessage({ type: "echoResponse", content: message.content });
+    } else {
+      console.log("content.js", "no message type found", message);
     }
   }
 
@@ -136,8 +138,8 @@ async function onLoad() {
           let url = innerResult.content.url;
 
           if (type && url) {
-            if (type === "redirect") {
-              console.log("content.js", "redirect", url);
+            if (type === "jump") {
+              console.log("content.js", "jump", url);
               window.open(url, "_self");
             } else if (type === "following") {
               console.log("content.js", "following", url);
@@ -180,3 +182,17 @@ async function onLoad() {
 chrome.runtime.onMessage.addListener(onMessage);
 
 onLoad();
+
+let url = window.location.href;
+let timeNow = Date.now();
+let urlCheckInterval = setInterval(function() {
+  // console.log("content.js", "checking url", window.location.href);
+  if (window.location.href !== url) {
+    onLoad();
+    url = window.location.href;
+    timeNow = Date.now();
+  }
+  if (Date.now() - timeNow > (5 * 60 * 1000)) {
+    clearInterval(urlCheckInterval);
+  }
+}, 2000);
