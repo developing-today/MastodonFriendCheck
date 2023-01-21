@@ -524,10 +524,10 @@ export async function toggleMastodonTab(tab, settings) {
 
 export async function onInstalled(reason) {
   // console.log("onInstalled", reason);
-  if ([
-    chrome.runtime.OnInstalledReason.INSTALL,
-    "onClicked",
-    "onClicked,noInstance"
+  if (![
+    chrome.runtime.OnInstalledReason.BROWSER_UPDATE,
+    chrome.runtime.OnInstalledReason.CHROME_UPDATE,
+    chrome.runtime.OnInstalledReason.UPDATE
   ].includes(reason)) {
     // console.log("onInstalled", "syncCacheWithStorage");
     await syncCacheWithStorage();
