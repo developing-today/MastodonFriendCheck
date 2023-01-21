@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "name": "Mastodon Friend Checker",
   "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
   "homepage_url": "https://src.developing.today/MastodonFriendChecker",
