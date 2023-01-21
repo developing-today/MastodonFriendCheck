@@ -555,6 +555,38 @@ function filterObject(obj, callback) {
     filter(([key, val]) => callback(val, key)));
 }
 
+export async function syncLocalWithFollowsCsv() {
+  console.log("syncLocalWithFollowsCsv");
+  let instance = await getInstance();
+  console.log("syncLocalWithFollowsCsv", instance);
+  console.log("syncLocalWithFollowsCsv", cache);
+  console.log("syncLocalWithFollowsCsv", await getStorage());
+  if (instance) {
+    console.log("syncLocalWithFollowsCsv", instance);
+    return fetch(instance + "settings/exports/follows.csv")
+    .then(response => response.text()).then(text => {
+      // console.log("syncLocalWithFollowsCsv text", text);
+      let content = {};
+      let lines = text.split("\n");
+      lines.slice(1).map(line => {
+        let account = line.split(",")[
+          lines[0].split(",").indexOf("Account address")];
+        if (account) {
+          content[account] = true;
+        }
+      });
+      let timestamp = new Date();
+      let follows = { timestamp, content };
+      console.log("syncLocalWithFollowsCsv content", follows);
+      cache.follows = follows;
+
+      return setStorage({ follows }, { local: true });
+    });
+  } else {
+    console.log("syncLocalWithFollowsCsv", "no instance");
+  }
+}
+
 export async function onChanged(changes, namespace) {
   console.log("onChanged", { changes, namespace, cache, storage: await getStorage() });
 
@@ -576,38 +608,6 @@ export async function onChanged(changes, namespace) {
   // cache["lastSyncPartial"] = new Date();
   console.log("onChanged", { cache });
 };
-
-export async function syncLocalWithFollowsCsv() {
-  console.log("syncLocalWithFollowsCsv");
-  let instance = await getInstance();
-  console.log("syncLocalWithFollowsCsv", instance);
-  console.log("syncLocalWithFollowsCsv", cache);
-  console.log("syncLocalWithFollowsCsv", await getStorage());
-  if (instance) {
-    console.log("syncLocalWithFollowsCsv", instance);
-    return fetch(instance + "settings/exports/follows.csv")
-    .then(response => response.text()).then(text => {
-      console.log("syncLocalWithFollowsCsv text", text);
-      let content = {};
-      let lines = text.split("\n");
-      lines.slice(1).map(line => {
-        let account = line.split(",")[
-          lines[0].split(",").indexOf("Account address")];
-        if (account) {
-          content[account] = true;
-        }
-      });
-      let timestamp = new Date();
-      let follows = { timestamp, content };
-      console.log("syncLocalWithFollowsCsv content", follows);
-      cache.follows = follows;
-
-      return setStorage({ follows }, { local: true });
-    });
-  } else {
-    console.log("syncLocalWithFollowsCsv", "no instance");
-  }
-}
 
 export async function onClicked(tab) {
   let version = await getStorageVersion();
@@ -856,33 +856,37 @@ async function checkFollows(url, settings) {
       let instance = url.hostname.replace(url.protocol + "//", "");
       let path = url.pathname.split("/").filter((item) => item !== "");
       console.log("content.js", "url", url, instance, path);
-
-      let handle = path[0];
-
-      if (handle.startsWith("@")) {
-        handle = handle.substring(1);
-      }
-      let handleSplit = handle.split("@");
-
-      if (handleSplit.length > 1) {
-        handle = handleSplit[0];
-        instance = handleSplit[1];
-      }
-      let account = handle + "@" + instance;
-      console.log("content.js", "handle", {handle, instance, result, cache});
-
-      if (account in result.follows.content) {
-        console.log("content.js", "account in follows", account);
-        return result.InstanceHttps + "@" + account;
+      if (path.length > 2) {
+        console.log("content.js", "path too long, not a profile page");
+        console.log("content.js", "path", path);
       } else {
-        console.log("content.js", "account not in follows", account, result.follows);
+        let handle = path[0];
 
-        if (Date.now() - result.follows.timestamp > 1000 * 60) {
-          console.log("content.js", "follows is too old", result.follows.timestamp);
-          await syncLocalWithFollowsCsv();
-          if (account in result.follows.content) {
-            console.log("content.js", "account in follows now", account);
-            return result.InstanceHttps + "@" + account;
+        if (handle.startsWith("@")) {
+          handle = handle.substring(1);
+        }
+        let handleSplit = handle.split("@");
+
+        if (handleSplit.length > 1) {
+          handle = handleSplit[0];
+          instance = handleSplit[1];
+        }
+        let account = handle + "@" + instance;
+        console.log("content.js", "handle", {handle, instance, result, cache});
+
+        if (account in result.follows.content) {
+          console.log("content.js", "account in follows", account);
+          return result.InstanceHttps + "@" + account;
+        } else {
+          console.log("content.js", "account not in follows", account, result.follows);
+
+          if (Date.now() - result.follows.timestamp > 1000 * 60) {
+            console.log("content.js", "follows is too old", result.follows.timestamp);
+            await syncLocalWithFollowsCsv();
+            if (account in result.follows.content) {
+              console.log("content.js", "account in follows now", account);
+              return result.InstanceHttps + "@" + account;
+            }
           }
         }
       }
