@@ -83,6 +83,7 @@ export async function getStorage(keys) {
   let local = await chrome.storage.local.get(Array.isArray(keys) ? keys : [keys]);
   let result = {};
   Object.assign(result, sync, local);
+  console.log("getStorage", { keys, result, sync, local });
   return result;
 }
 
@@ -206,9 +207,9 @@ export async function onResult() {
 
     if (result.follows.content) {
 
-      if (result.follows.content.keys().length > 0) {
+      if (Object.keys(result.follows.content).length > 0) {
         instanceLabel =
-          instanceLabel + "\n(" + result.follows.content.keys().length + ")";
+          instanceLabel + "\n(" + Object.keys(result.follows.content).length + ")";
       }
     }
     document.getElementById("instanceLabel").innerHTML = instanceLabel;
@@ -432,14 +433,12 @@ export async function onLoad() {
 
     } else if (instanceLabel) {
 
-      if (result.FollowingList) {
+      if (result.follows) {
+        console.log("result.follows", result.follows);
 
-        if (
-          Array.isArray(result.FollowingList) &&
-          result.FollowingList.length > 0
-        ) {
+        if (result.follows.content && Object.keys(result.follows.content).length > 0) {
           instanceLabel =
-            instanceLabel + "\n(" + result.FollowingList.length + ")";
+            instanceLabel + "\n(" + Object.keys(result.follows.content).length + ")";
         }
       }
 
