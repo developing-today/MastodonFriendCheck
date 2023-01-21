@@ -5,7 +5,7 @@ export function versionWhichSignifiesFirstRunIsNeeded() {
 }
 
 export function get(object, property, settings) {
-  // console.log("get", { object, property, settings });
+  console.log("get", { object, property, settings });
   let defaultValue = settings ?
     get(settings, "default") : null;
 
@@ -16,7 +16,7 @@ export function get(object, property, settings) {
       object[property] !== null
   let result = resultCond ? object[property] : defaultValue;
 
-  // console.log("get", { resultCond, defaultValue, result });
+  console.log("get", { resultCond, defaultValue, result });
   return result;
 }
 
@@ -35,6 +35,11 @@ export async function getCurrentTab() {
   };
   let [tab] = await chrome.tabs.query(queryOptions);
   console.log("currentTab", tab);
+  // if (!tab) {
+  // request window location through content script
+  // import getcallbacktimestamp from content.js
+  // send echorequest, content script for echo response
+  // }
   return tab;
 }
 export function sendResultsToCache(results, settings) {
@@ -81,7 +86,7 @@ export async function getStorage(keys, settings) {
   if (keysArray.every(value =>
         Object.keys(cache).includes(value))) {
 
-    if (get(settings, "strict") === true) {
+    if (get(settings, "strict")) {
       let result = {};
       keysArray.forEach(key => result[key] = cache[key]);
       return result;
@@ -90,7 +95,7 @@ export async function getStorage(keys, settings) {
     }
 
   } else {
-    if (get(settings, "strict") === true) {
+    if (get(settings, "strict")) {
       await syncCacheWithStorage();
       let result = {};
       keysArray.forEach(key => result[key] = cache[key]);
@@ -219,12 +224,12 @@ export async function setCode(url) { // TODO:
   // https://hachyderm.io/oauth/authorize?response_type=code&client_id=-cx14PEOeRBwp4CC6rHzcy3QTGC63Z5zY3G33CHEqtk&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&scope=write%3Afollows
   // https://hachyderm.io/oauth/authorize/native?code=Ev5GQx8SdH0iMvgqZkKf-4PQG3CkrqSv1uROLwl4wIE
   let codeSplit = url.split("?");
-
+  let instance = await getInstance();
   if (
-    await getInstance() + getCodeRedirectPath() ==
+    instance + getCodeRedirectPath() ==
     codeSplit[0]
   ) {
-      createTab(await getInstance());
+      createTab(instance);
       let code = codeSplit.split("=")[1];
       return setStorageWithProperty("code", code);
   }
@@ -508,65 +513,6 @@ export async function toggleMastodonTab(tab, settings) {
     });
 }
 
-export async function sendResponseToTab(tabId, response) {
-  return chrome.tabs.sendMessage(tabId, response);
-}
-
-export async function onMessage(message, sender, sendResponse) {
-  if (Array.isArray(message)) {
-    return Promise.all(message.map(m => onMessage(m, sender, sendResponse)));
-  }
-
-  let response = {};
-
-  if (message.timestamp) {
-
-    if (message.group) {
-      Object.assign(response, { group: message.group, timestamp: message.timestamp });
-
-    } else {
-      Object.assign(response, { timestamp: message.timestamp });
-    }
-  }
-
-  if (message.type) {
-    Object.assign(response, { type: message.type });
-  }
-
-  Object.assign(response, { content: {}, parent: { message: {}, sender: {}, sendResponse: {} } });
-  Object.assign(response.content, message);
-  Object.assign(response.parent.message, message);
-  Object.assign(response.parent.sender, sender);
-  Object.assign(response.parent.sendResponse, sendResponse);
-
-  console.log("onMessage", message, sender, sendResponse, response);
-
-  if (message.type == "getStorage") {
-    Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
-    return sendResponseToTab(sender.tab.id, response);
-
-  } else if (message.type == "setStorage") {
-    await setStorage(message);
-    return Promise.resolve();
-
-  } else if (message.type == "toggleMastodonUrl") {
-    Object.assign(response.message, await toggleMastodonUrl(sender.url, {status: "onMessage"}));
-    return sendResponseToTab(sender.tab.id, response);
-
-  } else {
-    console.log("onMessage", "Unknown message type", message.type, message);
-    return Promise.resolve();
-  }
-}
-
-export function onAlarm(alarm) {
-  if (alarm.name === "syncCacheWithStorage") {
-    syncCacheWithStorage();
-  } else if (alarm.name === "syncLocalWithFollowsCsv") {
-    syncLocalWithFollowsCsv();
-  }
-}
-
 export async function onInstalled(reason) {
   console.log("onInstalled", reason);
   if ([
@@ -574,19 +520,6 @@ export async function onInstalled(reason) {
     "onClicked",
     "onClicked,noInstance"
   ].includes(reason)) {
-    chrome.contextMenus.create({
-      "id": "context",
-      "title": "Toggle Page",
-      "contexts": ["all"]
-    });
-
-    chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-      console.log("contextMenus.onClicked", info, tab);
-      if (info.menuItemId == "context") {
-        await toggleMastodonTab(tab, {status: "onClicked"});
-      }
-    });
-
     console.log("onInstalled", "syncCacheWithStorage");
     await syncCacheWithStorage();
     if (
@@ -652,19 +585,23 @@ export async function syncLocalWithFollowsCsv() {
 
 export async function onClicked(tab) {
   let version = await getStorageVersion();
-  // await getInstance({ noHttps: true }) is null or empty
-  console.log("onClicked", { version, tab, versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(), instance: await getInstance({ noHttps: true }), cache, storage: await getStorage() });
+
+  let instance = await getInstance({ noHttps: true });
+  console.log("onClicked", { version, tab, versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(), instance, cache, storage: await getStorage() });
+
   if (version === versionWhichSignifiesFirstRunIsNeeded()){
     console.log("onClicked", "versionWhichSignifiesFirstRunIsNeeded");
     return onInstalled("onClicked");
   }
-  if (!await getInstance({ noHttps: true })) {
+
+  if (!instance) {
     console.log("onClicked", "no instance");
     return onInstalled("onClicked,noInstance");
   }
 
   if (await getStorageProperty("OnClickedToggle")) {
-    return onUpdated(tab.id, { status: "onClicked", onClicked: true }, tab);
+    return await toggleMastodonTab(tab, {status: "onClicked"});
+
   } else {
     console.log("onClicked", "OnClickedToggle disabled");
   }
@@ -672,7 +609,7 @@ export async function onClicked(tab) {
 
 export async function onUpdated(tabId, changeInfo, tab) {
 
-  if (["loading", "onClicked"].includes(changeInfo.status)) {
+  if (["loading", "onUpdated", "onMessage"].includes(changeInfo.status)) {
     console.log("onUpdated", tabId, changeInfo, tab);
 
     if (!tab) {
@@ -702,9 +639,6 @@ export async function onUpdated(tabId, changeInfo, tab) {
             tab = result;
           } else {
             console.log("onUpdated", "currentTab has no url", { tabId, changeInfo, tab });
-            // TODO:
-            // request window location through content script
-            // until then, return
             return;
           }
         });
@@ -731,13 +665,12 @@ export async function onUpdated(tabId, changeInfo, tab) {
       console.log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
       return;
     }
-    console.log("onUpdated", "instance", await getInstance());
+    let instance = await getInstance();
+    console.log("onUpdated", "instance", instance);
 
-    if (await getInstance()) {
-      console.log("onUpdated", "instance", await getInstance());
-      if (changeInfo.status === "onClicked") {
-        console.log("onUpdated", "onClicked", tab.url);
-      } else if (tab.url.indexOf(cache.InstanceHttps) > -1) {
+    if (instance) {
+
+      if (tab.url.indexOf(cache.InstanceHttps) > -1) {
         console.log("onUpdated", "url is local", tab.url);
 
         if (tab.url.indexOf("@") > -1 && tab.url.split("@").length > 2) {
@@ -823,39 +756,35 @@ export async function onUpdated(tabId, changeInfo, tab) {
         cache.lastUrls = [];
       }
 
-      if (changeInfo.status != "onClicked") {
+      if (cache.lastUrls.length > 0) {
 
-        if (cache.lastUrls.length > 0) {
+        if (tab.url == cache.lastUrl) {
+          console.log("onUpdated", "lastUrl was same", { lastUrl: cache.lastUrl, tabUrl: tab.url });
+          return;
+        }
 
-          if (tab.url == cache.lastUrl) {
-            console.log("onUpdated", "lastUrl was same", { lastUrl: cache.lastUrl, tabUrl: tab.url });
-            return;
-          }
+        let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1];
 
-          let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1];
+        if (lastUrlData.urls.some(url => url === tab.url)) {
+          let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 5;
 
-          if (lastUrlData.urls.some(url => url === tab.url)) {
-            let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 5;
-
-            if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
-              console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
-              return;
-            }
-          }
-          let timeBetweenUpdatesForSameUrl = 1000 * 2;
-
-          if (
-              cache.lastUrls.some(lastUrl =>
-                lastUrl.urls.some(url =>
-                    url === tab.url &&
-              url.timestamp > timestamp - timeBetweenUpdatesForSameUrl))
-            ) {
-            console.log("onUpdated", "url was too new", { tab, timestamp, timeBetweenUpdatesForSameUrl, lastUrls: cache.lastUrls });
+          if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
+            console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
             return;
           }
         }
-      }
+        let timeBetweenUpdatesForSameUrl = 1000 * 2;
 
+        if (
+            cache.lastUrls.some(lastUrl =>
+              lastUrl.urls.some(url =>
+                  url === tab.url &&
+            url.timestamp > timestamp - timeBetweenUpdatesForSameUrl))
+          ) {
+          console.log("onUpdated", "url was too new", { tab, timestamp, timeBetweenUpdatesForSameUrl, lastUrls: cache.lastUrls });
+          return;
+        }
+      }
       console.log("onUpdated", "passed conditions")
 
       cache.lastUrls = cache.lastUrls.slice(-9);
@@ -872,11 +801,159 @@ export async function onUpdated(tabId, changeInfo, tab) {
   }
 }
 
+async function syncContextMenus() {
+  await chrome.contextMenus.removeAll();
+  await chrome.contextMenus.create({
+    "id": "context",
+    "title": "Toggle Page",
+    "documentUrlPatterns": [
+      "*://*/@*",
+      "*://*/users/*",
+      "*://*/web/statuses/*"
+    ]
+  });
+}
+
+async function checkFollows(url) {
+  let keys = ["InstanceHttps", "InstanceClean", "follows"];
+  let result = await getStorage(keys);
+  console.log("content.js", "getStorage", result.InstanceHttps, result);
+
+  if (url && result && keys.every((key) => key in result)) {
+    url = new URL(url);
+
+    if (url.hostname == result.InstanceClean) {
+      console.log("content.js", "on instance page");
+
+    } else {
+      console.log("content.js", "not on instance page");
+      let instance = url.hostname.replace(url.protocol + "//", "");
+      let path = url.pathname.split("/").filter((item) => item !== "");
+      console.log("content.js", "url", url, instance, path);
+
+      let handle = path[0];
+
+      if (handle.startsWith("@")) {
+        handle = handle.substring(1);
+      }
+      let handleSplit = handle.split("@");
+
+      if (handleSplit.length > 1) {
+        handle = handleSplit[0];
+        instance = handleSplit[1];
+      }
+      let account = handle + "@" + instance;
+      console.log("content.js", "handle", handle, instance);
+
+      return account in result.follows ? (result.InstanceHttps + "@" + account) : null;
+    }
+  } else {
+    console.log("content.js", "invalid", { result, keys, url });
+  }
+}
+
+export async function sendMessage(tabId, response, settings) {
+
+  if (get(settings, "type")) {
+    console.log("sendMessage", "type", get(settings, "type"), response);
+    Object.assign(response, { type: get(settings, "type") });
+  }
+
+  if (get(settings, "content")) {
+    console.log("sendMessage", "content", get(settings, "content"), response);
+    Object.assign(response, { content: get(settings, "content") });
+  }
+
+  if (!get(response, "timestamp")) {
+    Object.assign(response, { timestamp: Date.now() });
+  }
+
+  if (!get(response, "content")) {
+    let copy = {};
+    Object.assign(copy, response);
+    Object.assign(response, { content: copy });
+  }
+
+  console.log("sendMessage", { tabId, response, settings });
+  return chrome.tabs.sendMessage(tabId, response);
+}
+
+export async function onMessage(message, sender, sendResponse) {
+  if (Array.isArray(message)) {
+    return Promise.allSettled(message.map(m => onMessage(m, sender, sendResponse)));
+  }
+
+  let response = {};
+
+  if (message.timestamp) {
+
+    if (message.group) {
+      Object.assign(response, { group: message.group, timestamp: message.timestamp });
+
+    } else {
+      Object.assign(response, { timestamp: message.timestamp });
+    }
+  }
+
+  if (message.type) {
+    Object.assign(response, { type: message.type });
+  }
+
+  Object.assign(response, { content: {}, parent: { message: {}, sender: {}, sendResponse: {} } });
+  Object.assign(response.content, message);
+  Object.assign(response.parent.message, message);
+  Object.assign(response.parent.sender, sender);
+  Object.assign(response.parent.sendResponse, sendResponse);
+
+  console.log("onMessage", message, sender, sendResponse, response);
+
+  if (message.type == "getStorage") {
+    Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
+    sendMessage(sender.tab.id, response);
+
+  } else if (message.type == "setStorage") {
+    await setStorage(message);
+
+  } else if (message.type == "onLoad") {
+    console.log("onMessage", "onLoad", message, sender, sendResponse, response);
+
+    let url = await checkFollows(sender.tab.url);
+
+    if (url) {
+      console.log("onMessage", "onLoad", "following", url);
+      sendMessage(sender.tab.id, response, { type: "following", content: { url } });
+    }
+
+    onUpdated(sender.tab.id, { status: "onMessage", onMessage: true, response }, sender.tab);
+
+  } else if (message.type == "echoRequest") {
+    sendMessage(sender.tab.id, response, { type: "echoResponse" });
+  } else {
+    console.log("onMessage", "Unknown message type", message.type, message);
+  }
+  return Promise.resolve();
+}
+
+export function onAlarm(alarm) {
+  if (alarm.name === "syncCacheWithStorage") {
+    syncCacheWithStorage();
+  } else if (alarm.name === "syncLocalWithFollowsCsv") {
+    syncLocalWithFollowsCsv();
+  }
+}
+
 chrome.action.onClicked.addListener(onClicked);
 
 chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 5});
 chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 60});
 chrome.alarms.onAlarm.addListener(onAlarm);
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  console.log("contextMenus.onClicked", info, tab);
+  if (info.menuItemId == "context") {
+    await toggleMastodonTab(tab, {status: "onClicked"});
+  }
+});
 
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.runtime.onMessage.addListener(onMessage);
@@ -886,6 +963,7 @@ chrome.storage.onChanged.addListener(onChanged);
 chrome.tabs.onUpdated.addListener(onUpdated);
 
 syncCacheWithStorage();
+syncContextMenus();
 
 /*
 // todo:
