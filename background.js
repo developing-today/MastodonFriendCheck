@@ -384,8 +384,7 @@ export async function toggleMastodonUrl(url) {
           return mastodonUrlResult(statusUrl);
 
         } else {
-          // console.log("toggleMastodonUrl",
-              "local to remote", "account");
+          // console.log("toggleMastodonUrl", "local to remote", "account");
           return makeMastodonUrl(remoteDomain, username);
         }
 
@@ -831,7 +830,7 @@ async function syncContextMenus() {
   await chrome.contextMenus.removeAll();
   await chrome.contextMenus.create({
     "id": "context",
-    "title": "Toggle Mastodon Page 🐘 Jump Now",
+    "title": "Toggle Mastodon Page 🐘 🐘 🐘 Jump Now",
     "documentUrlPatterns": [
       "*://*/@*",
       "*://*/users/*",
@@ -1004,6 +1003,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
+chrome.commands.onCommand.addListener(async (command, tab) => {
+  // console.log("commands.onCommand", { command, tab });
+  if (command == "toggle") {
+    await onClicked(tab);
+  } else {
+    // console.log("commands.onCommand", "Unknown command", command);
+  }
+});
+
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.runtime.onMessage.addListener(onMessage);
 
@@ -1011,7 +1019,7 @@ chrome.storage.onChanged.addListener(onChanged);
 
 chrome.tabs.onUpdated.addListener(onUpdated);
 
-console.log("background.js", "loaded");
+// console.log("background.js", "loaded");
 
 (() => (async () => {
     // console.log("background.js", "syncing.");
@@ -1023,4 +1031,4 @@ console.log("background.js", "loaded");
     // console.log("background.js", "synced cache with storage");
   })())();
 
-console.log("background.js", "done");
+// console.log("background.js", "done");

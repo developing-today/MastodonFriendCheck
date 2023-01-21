@@ -9,11 +9,19 @@
   "optional_host_permissions": ["https://*/*"],
   "action": {
     "default_icon":  "icon.png",
-    "default_title": "Toggle Mastodon Page 🐘 Jump Now"
+    "default_title": "Toggle Mastodon Page\n🐘 🐘 Jump Now  🐘"
   },
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "commands": {
+    "toggle": {
+      "suggested_key": {
+        "default": "Alt+J"
+      },
+      "description": "Toggle/Jump Mastodon Page"
+    }
   },
   "content_scripts": [
     {
