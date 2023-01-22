@@ -372,6 +372,10 @@ export async function getLocality(url, settings) {
   let explodedUrl = explodeUrlNoHandler(url);
   console.log("getLocality", explodedUrl);
   let handle = explodedUrl[1];
+  // TODO: handle double remote in the options and autoRedirect.
+  // can either go to local or remote when double remote.
+  // right now, onClicked goes to local on first click,
+  // then remote on second click. which aligns with the usual pattern.
   let doubleRemote = false;
 
   if (handle) {
@@ -542,12 +546,12 @@ export async function toggleMastodonUrl(url) {
             return;
           }
           let statusUrlObject = new URL(statusUrl);
-          let statuses = [
+          let statusesArray = [
             { instance: remoteDomain, id: status, type: "remote" },
             { instance: statusUrlObject.host, id: statusUrl.trim("/").split("/").slice(-1)[0], type: "local.rest.status" }
           ];
-          settings.statuses = statuses;
-          console.log("toggleMastodonUrl", { statusUrl, statuses, settings });
+          settings.statuses = statusesArray;
+          console.log("toggleMastodonUrl", { statusUrl, statusesArray, settings });
 
           if (subpath) {
             statusUrl += "/" + subpath;
@@ -754,9 +758,12 @@ export async function onInstalled(reason) {
   if (![
     chrome.runtime.OnInstalledReason.BROWSER_UPDATE,
     chrome.runtime.OnInstalledReason.CHROME_UPDATE,
-    chrome.runtime.OnInstalledReason.UPDATE
+    chrome.runtime.OnInstalledReason.UPDATE,
+    "chrome_update",
+    "browser_update",
+    "update"
   ].includes(reason)) {
-    console.log("onInstalled", "syncCacheWithStorage");
+    console.log("onInstalled", "syncCacheWithStorage", { reason });
     await syncCacheWithStorage();
     if (
       await getCurrentVersion() !==
