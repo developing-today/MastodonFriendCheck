@@ -336,6 +336,78 @@ export async function getLocality(url, settings) {
     return "remote";
   }
 }
+export async function getWebfinger(domain, account) {
+  // "https://" + server + "/.well-known/webfinger?resource=acct:" + user + "@" + server
+  // {
+  //   "subject": "acct:UserName@example.developing.today",
+  //   "aliases": [
+  //     "https://example.developing.today/@UserName",
+  //     "https://example.developing.today/users/UserName"
+  //   ],
+  //   "links": [
+  //     {
+  //       "rel": "http://webfinger.net/rel/profile-page",
+  //       "type": "text/html",
+  //       "href": "https://example.developing.today/@UserName"
+  //     },
+  //     {
+  //       "rel": "self",
+  //       "type": "application/activity+json",
+  //       "href": "https://example.developing.today/users/UserName"
+  //     },
+  //     {
+  //       "rel": "http://ostatus.org/schema/1.0/subscribe",
+  //       "template": "https://example.developing.today/authorize_interaction?uri={uri}"
+  //     }
+  //   ]
+  // }
+
+  let webfingerUrl = new URL(
+    "https://" + domain + "/.well-known/webfinger");
+  webfingerUrl.searchParams.set("resource", "acct:" + account + "@" + domain);
+
+  let webfinger = await fetch(webfingerUrl).then(result => {
+    console.log("getWebfinger", { webfingerUrl, result });
+    return result.json();
+  });
+  console.log("getWebfinger", { webfingerUrl, webfinger });
+  return webfinger;
+}
+
+export async function getWebfingerProfile(domain, account) {
+  let webfinger = await getWebfinger(domain, account);
+  console.log("getWebfingerProfile", { webfinger });
+
+  let profileUrls = get(webfinger, "links");
+  console.log("getWebfingerProfile", { webfinger, profileUrls });
+
+  if (!profileUrls) {
+    return null;
+  }
+
+  profileUrls = profileUrls.filter(link =>
+      link.rel  == "http://webfinger.net/rel/profile-page" &&
+      link.type == "text/html"
+    ).map(link => link.href);
+  console.log("getWebfingerProfile", { webfinger, profileUrls });
+  let profileUrl = profileUrls.length > 0 ? profileUrls[0] : null;
+  console.log({ profileUrls, profileUrl });
+
+  return profileUrl;
+}
+
+export async function getWebfingerAccount(domain, account) {
+  let webfinger = await getWebfinger(domain, account);
+
+  let subject = get(webfinger, "subject");
+
+  if (!subject) {
+    return null;
+
+  } else {
+    return subject.split(":")[1];
+  }
+}
 
 export async function toggleMastodonUrl(url) {
   // remote: https://mastodon.social/@elonjet
@@ -385,7 +457,8 @@ export async function toggleMastodonUrl(url) {
 
         } else {
           // console.log("toggleMastodonUrl", "local to remote", "account");
-          return makeMastodonUrl(remoteDomain, username);
+          let profileUrl = await getWebfingerProfile(remoteDomain, username);
+          return mastodonUrlResult(profileUrl);
         }
 
       } else {
@@ -412,6 +485,8 @@ export async function toggleMastodonUrl(url) {
           result = results.statuses[0];
 
           if (result) {
+            // todo: probably a bug related to
+            // webfinger and activitypub here
             let domain = remoteDomain ||  hostDomain;
             let localUrl = makeMastodonUrl(
               instance, username, domain, result.id, subpath);
@@ -427,10 +502,16 @@ export async function toggleMastodonUrl(url) {
           // console.log("toggleMastodonUrl", "no results");
           // TODO: if all-url, try to find status on remote
         }
-
       } else {
-        // console.log("toggleMastodonUrl", "remote to local", "account");
-        return makeMastodonUrl(instance, username, hostDomain);
+        console.log("toggleMastodonUrl", "remote to local", "account");
+        let domain = remoteDomain ||  hostDomain;
+        let account = await getWebfingerAccount(domain, username);
+        let [webUsername, webDomain] = account.split("@");
+        let localUrl = makeMastodonUrl(
+          instance, webUsername, webDomain, null, subpath);
+        console.log("toggleMastodonUrl", "use local", localUrl);
+
+        return localUrl;
       }
     }
   }
@@ -798,7 +879,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
             return;
           }
         }
-        let timeBetweenUpdatesForSameUrl = 1000 * 2;
+        let timeBetweenUpdatesForSameUrl = 1000 * 4;
 
         if (
             cache.lastUrls.some(lastUrl =>
