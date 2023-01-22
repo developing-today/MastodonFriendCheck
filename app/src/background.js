@@ -118,8 +118,8 @@ export async function getStorageProperty(name) {
   return result[name];
 }
 
-export function createTab(url) {
-  console.log("createTab: " + url);
+export function createTab(url, settings) {
+  console.log("createTab:", { url });
   chrome.tabs.create({ url: url });
 }
 
@@ -136,16 +136,17 @@ export function updateTab(url, settings) {
   if (!tabId) {
     tabId = null;
   }
-  chrome.tabs.update(tabId, { url: url });
+  chrome.tabs.update(tabId, { url });
   console.log("updateTab: ", {tabId, url});
 }
 
-export async function sendUrlToTab(url) {
+export async function sendUrlToTab(url, settings) {
+  console.log("sendUrlToTab", {url, settings});
   if (url) {
-    if (await getStorageProperty("OpenInNewTab")) {
-      createTab(url);
+    if (get(settings, "OpenInNewTab") || await getStorageProperty("OpenInNewTab")) {
+      createTab(url, settings);
     } else {
-      updateTab(url);
+      updateTab(url, settings);
     }
   }
 }
@@ -171,10 +172,10 @@ export async function setStorage(object, settings) {
   console.log("setStorage", cache);
 
   if (get(settings, "local")) {
-    // console.log("setStorage local", object);
+    console.log("setStorage local", object);
     return chrome.storage.local.set(object);
   } else {
-    // console.log("setStorage sync", object);
+    console.log("setStorage sync", object);
     return chrome.storage.sync.set(object);
   }
 }
@@ -292,38 +293,55 @@ export function makeMastodonUrl(
   url.push(status);
   url.push(subpath); // TODO: test this
   url = url.filter(element => element);
-  console.log("makeMastodonUrl", {url , local, username, remote, status , subpath});
+  console.log("makeMastodonUrl", {url , local, username, remote, status , subpath, settings});
 
   let result = {
-    accounts: [ { instance: (remote || local), username } ],
-    statuses: !status ? [] : [ { instance: (remote || local), id: status } ]
+    accounts: [ { instance: (remote || local), username, type: "built", type: "built" } ],
+    statuses: !status ? [] : [ { instance: (remote || local), id: status, type: "built" } ],
   };
+  console.log("makeMastodonUrl", "result", { result, settings, url });
 
   if (settings) {
+    console.log("makeMastodonUrl", "settings", { result, settings, url });
     if (settings.accounts) {
+      console.log("makeMastodonUrl", "settings.accounts", { result, settings, url });
       if (Array.isArray(settings.accounts)) {
+        console.log("makeMastodonUrl", "settings.accounts.isArray", { result, settings, url });
         settings.accounts.forEach(account => {
+          console.log("makeMastodonUrl", "settings.accounts.forEach", { result, settings, url });
           result.accounts.push(account);
+          console.log("makeMastodonUrl", "settings.accounts.forEach result", { result, settings, url });
         });
       } else {
+        console.log("makeMastodonUrl", "settings.accounts.push", { result, settings, url });
         result.accounts.push(settings.accounts);
+        console.log("makeMastodonUrl", "settings.accounts.push result", { result, settings, url });
       }
       delete settings.accounts;
     }
+
     if (settings.statuses) {
+      console.log("makeMastodonUrl", "settings.statuses", { result, settings, url });
+
       if (Array.isArray(settings.statuses)) {
         settings.statuses.forEach(status => {
           result.statuses.push(status);
         });
+        console.log("makeMastodonUrl", "settings.statuses isArray result", { result, settings, url });
       } else {
         result.statuses.push(settings.statuses);
       }
+      console.log("makeMastodonUrl", "settings.statuses result", { result, settings, url });
       delete settings.statuses;
     }
-    Object.assign(result, settings);
-  }
+    console.log("makeMastodonUrl", "settings result", { result, settings, url });
 
-  return mastodonUrlResult(url.join("/"), settings);
+    Object.assign(result, settings);
+    console.log("makeMastodonUrl", "settings Object.assign result", { result, settings, url });
+  }
+  console.log("makeMastodonUrl", "result", { result, settings, url });
+
+  return mastodonUrlResult(url.join("/"), result);
 }
 
 export function changeMastodonUriToUrl(url) {
@@ -368,15 +386,15 @@ export async function getLocality(url, settings) {
   console.log("getLocality", { url, settings, explodedUrl, handle, doubleRemote, instanceClean, urlClean});
 
   if (doubleRemote) {
-    // console.log("doubleRemote");
+    console.log("doubleRemote");
     return "remote-remote";
 
   } else if (urlClean == instanceClean) {
-    // console.log("local");
+    console.log("local");
     return "local";
 
   } else {
-    // console.log("remote");
+    console.log("remote");
     return "remote";
   }
 }
@@ -411,7 +429,7 @@ export async function getWebfinger(instance, username) {
   webfingerUrl.searchParams.set("resource", "acct:" + username + "@" + instance);
 
   let webfinger = await fetch(webfingerUrl).then(result => {
-    // console.log("getWebfinger", { webfingerUrl, result });
+    console.log("getWebfinger", { webfingerUrl, result });
     return result.json();
   });
   console.log("getWebfinger", { webfingerUrl, webfinger });
@@ -434,7 +452,7 @@ export function getProfileFromWebfinger(webfinger) {
     ).map(link => link.href);
   console.log("getWebfingerProfile", { webfinger, profileUrls });
   let profileUrl = profileUrls.length > 0 ? profileUrls[0] : null;
-  console.log({ profileUrls, profileUrl });
+  console.log("getWebfingerProfile", { webfinger, profileUrls, profileUrl });
 
   return profileUrl;
 }
@@ -459,7 +477,14 @@ export function getAccountFromWebfinger(webfinger) {
 export async function getWebfingerAccount(instance, username) {
   let webfinger = await getWebfinger(instance, username);
   console.log("getWebfingerAccount", { webfinger });
-  return getAccountFromWebfinger(webfinger);
+
+  let account = getAccountFromWebfinger(webfinger).split("@");
+
+  if (account.length == 1) {
+    account = [account[0], instance];
+  }
+
+  return account.join("@");
 }
 
 export async function toggleMastodonUrl(url) {
@@ -489,13 +514,13 @@ export async function toggleMastodonUrl(url) {
     changeMastodonUriToUrl(url.toString()));
   let [hostDomain, handle, status] = urlExploded;
   let subpath = urlExploded.slice(3).join("/");
-  console.log({ hostDomain, handle, status, subpath });
+  console.log("toggleMastodonUrl", { hostDomain, handle, status, subpath });
 
   if (handle && handle[0] == "@") {
     let [username, remoteDomain] = handle.split("@").slice(1);
     let instance = await getInstance();
     let hostDomainUrl = makeHttps(hostDomain);
-    // console.log({ username, remoteDomain, instance, hostDomainUrl });
+    console.log("toggleMastodonUrl", { username, remoteDomain, instance, hostDomainUrl });
 
     if (hostDomainUrl == instance) {
 
@@ -504,60 +529,75 @@ export async function toggleMastodonUrl(url) {
         let profileUrl = await getWebfingerProfile(remoteDomain, username);
         let [ profileUsername, profileDomain ] = profileUrl.split("/").slice(-1)[0].split("@");
         let settings = { accounts: [
-          { instance: remoteDomain, username: username },
-          { instance: profileDomain, username: profileUsername }
+          { instance: remoteDomain, username: username , type: "remote" },
+          { instance: profileDomain, username: profileUsername, type: "webfinger-profile" }
         ] };
 
         if (status) {
-          // console.log("toggleMastodonUrl", "local to remote", "status");
+          console.log("toggleMastodonUrl", "local to remote", "status");
           let results = await statuses(status);
-          // console.log(results);
+          console.log("toggleMastodonUrl", { results });
           let statusUrl = get(results, "url");
           if (!statusUrl) {
             return;
           }
-          settings.statuses = [
-            { instance: remoteDomain, id: status },
-            { instance: new URL(statusUrl).host, id: statusUrl.split("/").slice(-1)[0].trim("/") }
+          let statusUrlObject = new URL(statusUrl);
+          let statuses = [
+            { instance: remoteDomain, id: status, type: "remote" },
+            { instance: statusUrlObject.host, id: statusUrl.trim("/").split("/").slice(-1)[0], type: "local.rest.status" }
           ];
+          settings.statuses = statuses;
+          console.log("toggleMastodonUrl", { statusUrl, statuses, settings });
+
           if (subpath) {
             statusUrl += "/" + subpath;
           }
-          // console.log("toggleMastodonUrl", { statusUrl, settings });
+          console.log("toggleMastodonUrl", { statusUrl, settings });
           return mastodonUrlResult(statusUrl, settings);
 
         } else {
-          // console.log("toggleMastodonUrl", "local to remote", "account");
+          console.log("toggleMastodonUrl", "local to remote", "account", { profileUrl, settings });
           return mastodonUrlResult(profileUrl, settings);
         }
 
       } else {
-        // console.log("toggleMastodonUrl", "local to local"); // ???
+        console.log("toggleMastodonUrl", "local to local"); // ???
         // return makeMastodonUrl(
             // instance, username, null, status, subpath);
         return;
       }
 
     } else {
-      // console.log("toggleMastodonUrl", "remote to local");
+      console.log("toggleMastodonUrl", "remote to local");
+
       let settings = { accounts: [], statuses: [] };
       let domain = remoteDomain || hostDomain;
       let webfinger = await getWebfinger(domain, username);
+      console.log("toggleMastodonUrl", { webfinger, domain, username, settings });
 
       let profileUrl = getProfileFromWebfinger(webfinger);
       let profileUsername = profileUrl.split("/").slice(-1)[0].split("@")[0];
       let profileDomain = new URL(profileUrl).host;
+      console.log("toggleMastodonUrl", "profile", { profileUrl, profileUsername, profileDomain });
 
-      let webAccount = getAccountFromWebfinger(webfinger);
-      let [webUsername, webDomain] = webAccount.split("@");
+      let webAccount = getAccountFromWebfinger(webfinger).split("@");
+      console.log("toggleMastodonUrl", "webAccount", { webAccount });
+
+      if (webAccount.length == 1) {
+        webAccount = [webAccount[0], domain];
+      }
+
+      let [webUsername, webDomain] = webAccount
+      console.log("toggleMastodonUrl", { webAccount, webUsername, webDomain, settings });
 
       settings.accounts.push(
         { instance: domain, username, type: "url" },
-        { instance: webDomain, username: webUsername, type: "webfinger-account" },
+        { instance: webDomain, username: webUsername, type: "webfinger-account" }
       );
+      console.log("toggleMastodonUrl", "accounts", { profileUrl, profileUsername, profileDomain, webAccount, webUsername, webDomain, settings });
 
       if (status) {
-        // console.log("toggleMastodonUrl", "remote to local", "status");
+        console.log("toggleMastodonUrl", "remote to local", "status", { status, subpath, settings });
 
         let results = await search(url);
         let result;
@@ -573,30 +613,31 @@ export async function toggleMastodonUrl(url) {
           if (result) {
             // todo: probably a bug related to
             // webfinger and activitypub here
+            console.log("toggleMastodonUrl", "remote to local", "status", "result", { result, settings });
             settings.statuses.push(
               { instance: hostDomain, id: status, type: "url-host" },
               { instance: instance, id: result.id, type: "local" }
             );
+            console.log("toggleMastodonUrl", "statuses", { result, settings });
 
             let localUrl = makeMastodonUrl(
               instance, username, domain, result.id, subpath, settings);
-            // console.log("toggleMastodonUrl", "use local", { localUrl, settings });
-
+            console.log("toggleMastodonUrl", "use local", { localUrl, settings });
             return localUrl;
           } else {
-            // console.log("toggleMastodonUrl", "no result");
+            console.log("toggleMastodonUrl", "no result");
             // TODO: if all-url, try to find status on remote
           }
 
         } else {
-          // console.log("toggleMastodonUrl", "no results");
+          console.log("toggleMastodonUrl", "no results");
           // TODO: if all-url, try to find status on remote
         }
       } else {
-        // console.log("toggleMastodonUrl", "remote to local", "account");
+        console.log("toggleMastodonUrl", "remote to local", "account");
         let localUrl = makeMastodonUrl(
           instance, webUsername || username, webDomain || domain, null, subpath, settings);
-        // console.log("toggleMastodonUrl", "use local", { localUrl, settings });
+        console.log("toggleMastodonUrl", "use local", { localUrl, settings });
 
         return localUrl;
       }
@@ -627,7 +668,7 @@ export async function setToken(code) {
   return fetch(url, { method: "POST", body: formData }
   ).then(result => result.json()
   ).then(result => {
-    // console.log("setToken", result);
+    console.log("setToken", result);
     return result;
   }).then(setStorage).then(result => result.access_token);
 }
@@ -655,12 +696,19 @@ export async function toggleMastodonTab(tab, settings) {
 
   return toggleMastodonUrl(tab.url).then(async result => {
       if (!result) {
-        // console.log("toggleMastodonTab: no result");
+        console.log("toggleMastodonTab: no result");
         return;
       }
+      settings = settings || {};
+      Object.assign(settings, { tabId: tab.id, tab });
+
+      if (result.settings) {
+        Object.assign(settings, result.settings);
+      }
+
       let url = get(result, "url");
       let status = get(settings, "status");
-      // console.log("toggleMastodonUrl", "pending jump", url);
+      console.log("toggleMastodonUrl", "pending jump", url);
 
       if (
         url &&
@@ -675,22 +723,28 @@ export async function toggleMastodonTab(tab, settings) {
           )
         )
       ) {
+        console.log("toggleMastodonTab", "jump", { url, settings });
+
         if (
           !get(cache, "lastUrls") ||
           !Array.isArray(cache.lastUrls)
         ) {
-          // console.log("toggleMastodonTab", "lastUrls was not an array", cache.lastUrls);
+          console.log("toggleMastodonTab", "lastUrls was not an array", cache.lastUrls);
           cache.lastUrls = [];
         }
 
-        let accounts = get(result, "accounts");
-        cache.lastUrls.push({urls:[url, tab.url], accounts: accounts, timestamp: Date.now()});
+        let accounts = get(result, "accounts") || [];
+        let statuses = get(result, "statuses") || [];
+
+        cache.lastUrls.push({urls:[url, tab.url], accounts, statuses, timestamp: Date.now()});
         cache.lastUrl = url;
 
-        return sendUrlToTab(url, { tab });
+        console.log("toggleMastodonTab", "jump", { url, settings, cache, accounts, statuses });
+
+        return sendUrlToTab(url, settings);
 
       } else {
-        // console.log("toggleMastodonTab: no jump", { url });
+        console.log("toggleMastodonTab: no jump", { url, settings });
       }
     });
 }
@@ -702,7 +756,7 @@ export async function onInstalled(reason) {
     chrome.runtime.OnInstalledReason.CHROME_UPDATE,
     chrome.runtime.OnInstalledReason.UPDATE
   ].includes(reason)) {
-    // console.log("onInstalled", "syncCacheWithStorage");
+    console.log("onInstalled", "syncCacheWithStorage");
     await syncCacheWithStorage();
     if (
       await getCurrentVersion() !==
@@ -710,14 +764,14 @@ export async function onInstalled(reason) {
       reason == "onClicked,noInstance"
     ) {
       if (chrome.runtime.openOptionsPage) {
-        // console.log("onInstalled", "openOptionsPage");
+        console.log("onInstalled", "openOptionsPage");
         chrome.runtime.openOptionsPage();
       } else {
-        // console.log("onInstalled", "createTab");
+        console.log("onInstalled", "createTab");
         createTab(getChromeUrl("options.html"))
       }
     } else {
-      // console.log("onInstalled", "no version change");
+      console.log("onInstalled", "no version change");
     }
   }
 }
@@ -755,7 +809,7 @@ export async function syncLocalWithFollowsCsv() {
       return setStorage({ follows }, { local: true });
     });
   } else {
-    // console.log("syncLocalWithFollowsCsv", "no instance");
+    console.log("syncLocalWithFollowsCsv", "no instance");
   }
 }
 
@@ -788,12 +842,12 @@ export async function onClicked(tab) {
   console.log("onClicked", { version, tab, versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(), instance, cache, storage: await getStorage() });
 
   if (version === versionWhichSignifiesFirstRunIsNeeded()){
-    // console.log("onClicked", "versionWhichSignifiesFirstRunIsNeeded");
+    console.log("onClicked", "versionWhichSignifiesFirstRunIsNeeded");
     return onInstalled("onClicked");
   }
 
   if (!instance) {
-    // console.log("onClicked", "no instance");
+    console.log("onClicked", "no instance");
     return onInstalled("onClicked,noInstance");
   }
 
@@ -801,43 +855,43 @@ export async function onClicked(tab) {
     return await toggleMastodonTab(tab, {status: "onClicked"});
 
   } else {
-    // console.log("onClicked", "OnClickedToggle disabled");
+    console.log("onClicked", "OnClickedToggle disabled");
   }
 }
 
 export async function onUpdated(tabId, changeInfo, tab) {
 
   if (["loading", "onUpdated", "onMessage"].includes(changeInfo.status)) {
-    // console.log("onUpdated", tabId, changeInfo, tab);
+    console.log("onUpdated", tabId, changeInfo, tab);
 
     if (!tab) {
-      // console.log("onUpdated", "no tab");
+      console.log("onUpdated", "no tab");
       return;
     }
 
     if (!tab.url) {
-      // console.log("onUpdated", "no tab.url");
+      console.log("onUpdated", "no tab.url");
 
       if (tab.pendingUrl) {
-        // console.log("onUpdated", "tab has pendingUrl", { tabId, changeInfo, tab });
+        console.log("onUpdated", "tab has pendingUrl", { tabId, changeInfo, tab });
         tab.url = tab.pendingUrl;
 
       } else if (tab.currentTab) {
-        // console.log("onUpdated", "tab is currentTab", { tabId, changeInfo, tab });
+        console.log("onUpdated", "tab is currentTab", { tabId, changeInfo, tab });
         return;
 
       } else {
-        // console.log("onUpdated", "tab is not populated", { tabId, changeInfo, tab });
+        console.log("onUpdated", "tab is not populated", { tabId, changeInfo, tab });
 
         return getCurrentTab().then(result => {
-          // console.log("onUpdated", "currentTab", { tabId, changeInfo, tab });
+          console.log("onUpdated", "currentTab", { tabId, changeInfo, tab });
 
           if (result && (result.url || result.pendingUrl)) {
             Object.assign(result, { currentTab: true });
             return onUpdated(tabId, changeInfo, result);
 
           } else {
-            // console.log("onUpdated", "currentTab has no url", { tabId, changeInfo, tab });
+            console.log("onUpdated", "currentTab has no url", { tabId, changeInfo, tab });
             return;
           }
         });
@@ -845,31 +899,31 @@ export async function onUpdated(tabId, changeInfo, tab) {
     }
 
     if (!tab.url) {
-      // console.log("onUpdated", "no tab.url");
+      console.log("onUpdated", "no tab.url");
       return;
     }
 
     if (tab.url.indexOf("https://") !== 0 && tab.url.indexOf("http://") !== 0) {
-      // console.log("onUpdated", "not http(s)", tab.url);
+      console.log("onUpdated", "not http(s)", tab.url);
       return;
     }
 
     if (tab.url.indexOf("chrome://") === 0) {
-      // console.log("onUpdated", "chrome://", tab.url);
+      console.log("onUpdated", "chrome://", tab.url);
       return;
     }
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
-      // console.log("onUpdated", "code redirect", tab.url);
+      console.log("onUpdated", "code redirect", tab.url);
       // TODO: handle code redirect here.
     }
 
     if (tab.url.indexOf("@") === -1) {
-      // console.log("onUpdated", "no @", tab.url);
+      console.log("onUpdated", "no @", tab.url);
       return;
     }
 
-    // console.log("onUpdated", "init", tab.url);
+    console.log("onUpdated", "init", tab.url);
 
     let timeBetweenUpdates = 1200 * 1;
     let timestamp = new Date();
@@ -877,19 +931,19 @@ export async function onUpdated(tabId, changeInfo, tab) {
     if (!cache) { cache = {}; }
 
     if (get(cache, "lastTabUpdated") > timestamp - timeBetweenUpdates) {
-      // console.log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
+      console.log("onUpdated", "lastUpdated too new", { cache: cache.lastTabUpdated, timestamp, timeBetweenUpdates });
       return;
     }
     let instance = await getInstance();
-    // console.log("onUpdated", "instance", instance);
+    console.log("onUpdated", "instance", instance);
 
     if (instance) {
 
       if (tab.url.indexOf(instance) > -1) {
-        // console.log("onUpdated", "url is local", tab.url);
+        console.log("onUpdated", "url is local", tab.url);
 
         if (tab.url.indexOf("@") > -1 && tab.url.split("@").length > 2) {
-          // console.log("onUpdated", "remote user", tab.url);
+          console.log("onUpdated", "remote user", tab.url);
 
           let locality = "local";
 
@@ -906,7 +960,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
           let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
           let pageType = getPageType(urlExplode);
 
-          // console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
 
           if (
             pageType &&
@@ -919,16 +973,16 @@ export async function onUpdated(tabId, changeInfo, tab) {
               )
             )
           ) {
-            // console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
+            console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
 
           } else {
-            // console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
+            console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
             return;
           }
         }
 
       } else {
-        // console.log("onUpdated", "url is not local", tab.url);
+        console.log("onUpdated", "url is not local", tab.url);
 
         let locality = "remote";
 
@@ -945,7 +999,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
         let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
         let pageType = getPageType(urlExplode);
 
-        // console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
+        console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
 
         if (
           pageType &&
@@ -958,23 +1012,23 @@ export async function onUpdated(tabId, changeInfo, tab) {
             )
           )
         ) {
-          // console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
 
         } else {
-          // console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
           return;
         }
       }
 
       if (!get(cache, "lastUrls") || !Array.isArray(cache.lastUrls)) {
-        // console.log("onUpdated", "lastUrls was not an array", cache.lastUrls);
+        console.log("onUpdated", "lastUrls was not an array", cache.lastUrls);
         cache.lastUrls = [];
       }
 
       if (cache.lastUrls.length > 0) {
 
         if (tab.url == cache.lastUrl) {
-          // console.log("onUpdated", "lastUrl was same", { lastUrl: cache.lastUrl, tabUrl: tab.url });
+          console.log("onUpdated", "lastUrl was same", { lastUrl: cache.lastUrl, tabUrl: tab.url });
           return;
         }
 
@@ -984,7 +1038,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
           let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 8;
 
           if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
-            // console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
+            console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
             return;
           }
         }
@@ -996,11 +1050,11 @@ export async function onUpdated(tabId, changeInfo, tab) {
                   url === tab.url &&
             url.timestamp > timestamp - timeBetweenUpdatesForSameUrl))
           ) {
-          // console.log("onUpdated", "url was too new", { tab, timestamp, timeBetweenUpdatesForSameUrl, lastUrls: cache.lastUrls });
+          console.log("onUpdated", "url was too new", { tab, timestamp, timeBetweenUpdatesForSameUrl, lastUrls: cache.lastUrls });
           return;
         }
       }
-      // console.log("onUpdated", "passed conditions")
+      console.log("onUpdated", "passed conditions")
 
       cache.lastUrls = cache.lastUrls.slice(-9);
       cache.lastUrls.push({ urls: [tab.url], timestamp });
@@ -1008,7 +1062,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
       cache.lastTabUpdated = timestamp;
 
       let settings = changeInfo
-      // console.log("onUpdated", "settings", settings);
+      console.log("onUpdated", "settings", settings);
 
       return toggleMastodonTab(tab, settings);
     }
@@ -1037,18 +1091,18 @@ async function checkFollows(url, settings) {
     url = new URL(url);
 
     if (url.hostname == result.InstanceClean) {
-      // console.log("content.js", "on instance page");
+      console.log("content.js", "on instance page");
 
     } else {
-      // console.log("content.js", "not on instance page");
+      console.log("content.js", "not on instance page");
 
       let instance = url.hostname.replace(url.protocol + "//", "");
       let path = url.pathname.split("/").filter((item) => item !== "");
-      // console.log("content.js", "url", url, instance, path);
+      console.log("content.js", "url", url, instance, path);
 
       if (path.length > 2) {
-        // console.log("content.js", "path too long, not a profile page");
-        // console.log("content.js", "path", path);
+        console.log("content.js", "path too long, not a profile page");
+        console.log("content.js", "path", path);
 
       } else {
         let handle = path[0];
@@ -1066,42 +1120,42 @@ async function checkFollows(url, settings) {
         }
 
         let account = username + "@" + instance;
-        // console.log("content.js", "handleSplit", {username, instance, result, cache});
+        console.log("content.js", "handleSplit", {username, instance, result, cache});
 
         if (account in result.follows.content) {
-          // console.log("content.js", "account in follows", account);
+          console.log("content.js", "account in follows", account);
           return result.InstanceHttps + "@" + account;
 
         } else {
-          // console.log("content.js", "account not in follows", account, result.follows);
+          console.log("content.js", "account not in follows", account, result.follows);
 
           let webAccount = await getWebfingerAccount(instance, username);
           let [webAccountUsername, webAccountInstance] = webAccount.split("@");
 
           if (webAccount in result.follows.content) {
-            // console.log("content.js", "webAccount in follows", webAccount);
+            console.log("content.js", "webAccount in follows", webAccount);
             return result.InstanceHttps + "@" + webAccount;
 
           } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
-            // console.log("content.js", "follows is too old", result.follows.timestamp);
+            console.log("content.js", "follows is too old", result.follows.timestamp);
             await syncLocalWithFollowsCsv();
 
             if (account in result.follows.content) {
-              // console.log("content.js", "account in follows now", account);
+              console.log("content.js", "account in follows now", account);
               return result.InstanceHttps + "@" + account;
 
             } else {
-              // console.log("content.js", "account not in follows now", account);
+              console.log("content.js", "account not in follows now", account);
             }
           } else {
-            // console.log("content.js", "follows is not too old", result.follows.timestamp);
+            console.log("content.js", "follows is not too old", result.follows.timestamp);
           }
         }
       }
     }
 
   } else if (!get(settings, "noSync")) {
-    // console.log("content.js", "invalid", { result, keys, url });
+    console.log("content.js", "invalid", { result, keys, url });
     await syncLocalWithFollowsCsv();
     checkFollows(url, { noSync: true });
   }
@@ -1110,12 +1164,12 @@ async function checkFollows(url, settings) {
 export async function sendMessage(tabId, response, settings) {
 
   if (get(settings, "type")) {
-    // console.log("sendMessage", "type", get(settings, "type"), response);
+    console.log("sendMessage", "type", get(settings, "type"), response);
     Object.assign(response, { type: get(settings, "type") });
   }
 
   if (get(settings, "content")) {
-    // console.log("sendMessage", "content", get(settings, "content"), response);
+    console.log("sendMessage", "content", get(settings, "content"), response);
     Object.assign(response, { content: get(settings, "content") });
   }
 
@@ -1170,12 +1224,12 @@ export async function onMessage(message, sender, sendResponse) {
     await setStorage(message);
 
   } else if (message.type == "onLoad") {
-    // console.log("onMessage", "onLoad", message, sender, sendResponse, response);
+    console.log("onMessage", "onLoad", message, sender, sendResponse, response);
 
     let url = await checkFollows(sender.tab.url);
 
     if (url) {
-      // console.log("onMessage", "onLoad", "following", url);
+      console.log("onMessage", "onLoad", "following", url);
       sendMessage(sender.tab.id, response, { type: "following", content: { url } });
     }
 
@@ -1188,7 +1242,7 @@ export async function onMessage(message, sender, sendResponse) {
     syncLocalWithFollowsCsv();
 
   } else {
-    // console.log("onMessage", "Unknown message type", message.type, message);
+    console.log("onMessage", "Unknown message type", message.type, message);
   }
   return Promise.resolve();
 }
@@ -1205,7 +1259,7 @@ export function onAlarm(alarm) {
 chrome.action.onClicked.addListener(onClicked);
 
 chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 3});
-chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 2});
+chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 5});
 chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -1225,13 +1279,13 @@ chrome.tabs.onUpdated.addListener(onUpdated);
 console.log("background.js", "loaded");
 
 (() => (async () => {
-    // console.log("background.js", "syncing.");
+    console.log("background.js", "syncing.");
     await syncContextMenus();
-    // console.log("background.js", "synced context menus");
+    console.log("background.js", "synced context menus");
     await syncLocalWithFollowsCsv();
-    // console.log("background.js", "synced local with follows csv");
+    console.log("background.js", "synced local with follows csv");
     await syncCacheWithStorage();
-    // console.log("background.js", "synced cache with storage");
+    console.log("background.js", "synced cache with storage");
   })())();
 
 console.log("background.js", "done");

@@ -159,6 +159,7 @@ async function onLoad() {
                   clearInterval(buttonCheckInterval);
                 }
               }, 50);
+              // same idea again except for the .copypaste prompt TODO
             } else {
               // console.log("content.js", "no url type found", { type, url, result });
             }
