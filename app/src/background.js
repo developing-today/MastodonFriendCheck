@@ -34,7 +34,7 @@ export async function getCurrentTab() {
     lastFocusedWindow: true
   };
   let [tab] = await chrome.tabs.query(queryOptions);
-  // console.log("currentTab", tab);
+  console.log("currentTab", tab);
   // if (!tab) {
   // request window location through content script
   // import getcallbacktimestamp from content.js
@@ -55,7 +55,7 @@ export function sendResultsToCache(results, settings) {
   }
 
   if (cache.lastUrls) {
-    cache.lastUrls = cache.lastUrls.slice(-3);
+    cache.lastUrls = cache.lastUrls.slice(-9);
   }
 
   cache["lastSyncPartial"] = new Date();
@@ -119,13 +119,25 @@ export async function getStorageProperty(name) {
 }
 
 export function createTab(url) {
-  // console.log("createTab: " + url);
+  console.log("createTab: " + url);
   chrome.tabs.create({ url: url });
 }
 
-export function updateTab(url) {
-  // console.log("updateTab: " + url);
-  chrome.tabs.update({ url: url });
+export function updateTab(url, settings) {
+  console.log("updateTab: ", {url, settings});
+  let tabId = get(settings, "tabId");
+  //  || (get(settings, "tab").id || null;
+  if (!tabId) {
+    let tab = get(settings, "tab");
+    if (tab) {
+      tabId = tab.id;
+    }
+  }
+  if (!tabId) {
+    tabId = null;
+  }
+  chrome.tabs.update(tabId, { url: url });
+  console.log("updateTab: ", {tabId, url});
 }
 
 export async function sendUrlToTab(url) {
@@ -156,7 +168,7 @@ export async function setStorage(object, settings) {
   Object.assign(cache, object);
   cache.lastSyncPartial = new Date();
   // cache.counter++;
-  // console.log("setStorage", cache);
+  console.log("setStorage", cache);
 
   if (get(settings, "local")) {
     // console.log("setStorage local", object);
@@ -204,7 +216,7 @@ export function makeHttps(url) {
 
 export async function getInstance(settings) {
   let storage = await getStorage(["Instance", "InstanceHttps", "InstanceClean"]);
-  // console.log("getInstance", { settings, storage});
+  console.log("getInstance", { settings, storage});
 
   if (get(settings, "clean")) {
     return storage.InstanceClean;
@@ -254,8 +266,19 @@ export async function getCode() {
   });
 }
 
+export function mastodonUrlResult(url, settings) {
+  let result = { url };
+  if (settings) {
+    result = Object.assign(result, settings);
+  }
+  if (!result.pageType) {
+    result.pageType = "account";
+  }
+  return result;
+}
+
 export function makeMastodonUrl(
-  local, username, remote, status, subpath
+  local, username, remote, status, subpath, settings
 ) {
   let url = [
     makeHttps(local).slice(0, -1),
@@ -269,9 +292,38 @@ export function makeMastodonUrl(
   url.push(status);
   url.push(subpath); // TODO: test this
   url = url.filter(element => element);
-  // console.log("makeMastodonUrl", {url , local, username, remote, status , subpath});
+  console.log("makeMastodonUrl", {url , local, username, remote, status , subpath});
 
-  return mastodonUrlResult(url.join("/"));
+  let result = {
+    accounts: [ { instance: (remote || local), username } ],
+    statuses: !status ? [] : [ { instance: (remote || local), id: status } ]
+  };
+
+  if (settings) {
+    if (settings.accounts) {
+      if (Array.isArray(settings.accounts)) {
+        settings.accounts.forEach(account => {
+          result.accounts.push(account);
+        });
+      } else {
+        result.accounts.push(settings.accounts);
+      }
+      delete settings.accounts;
+    }
+    if (settings.statuses) {
+      if (Array.isArray(settings.statuses)) {
+        settings.statuses.forEach(status => {
+          result.statuses.push(status);
+        });
+      } else {
+        result.statuses.push(settings.statuses);
+      }
+      delete settings.statuses;
+    }
+    Object.assign(result, settings);
+  }
+
+  return mastodonUrlResult(url.join("/"), settings);
 }
 
 export function changeMastodonUriToUrl(url) {
@@ -298,17 +350,9 @@ export async function statuses(id, settings) {
   return fetch(url).then(result => result.json());
 }
 
-export function mastodonUrlResult(url, pageType, locality) {
-  return {
-    url: url,
-    pageType: pageType ? pageType : "account",
-    locality: locality ? locality : null
-  };
-}
-
 export async function getLocality(url, settings) {
   let explodedUrl = explodeUrlNoHandler(url);
-  // console.log("getLocality", explodedUrl);
+  console.log("getLocality", explodedUrl);
   let handle = explodedUrl[1];
   let doubleRemote = false;
 
@@ -321,7 +365,7 @@ export async function getLocality(url, settings) {
   let instanceClean = get(settings, "instanceClean",
       {default: await getInstance({ clean: true })});
   let urlClean = cleanDomain(url);
-  // console.log("getLocality", { url, settings, explodedUrl, handle, doubleRemote, instanceClean, urlClean});
+  console.log("getLocality", { url, settings, explodedUrl, handle, doubleRemote, instanceClean, urlClean});
 
   if (doubleRemote) {
     // console.log("doubleRemote");
@@ -336,10 +380,10 @@ export async function getLocality(url, settings) {
     return "remote";
   }
 }
-export async function getWebfinger(domain, account) {
+export async function getWebfinger(instance, username) {
   // "https://" + server + "/.well-known/webfinger?resource=acct:" + user + "@" + server
   // {
-  //   "subject": "acct:UserName@example.developing.today",
+  //   "subject": "acct:UserName@developing.today",
   //   "aliases": [
   //     "https://example.developing.today/@UserName",
   //     "https://example.developing.today/users/UserName"
@@ -363,19 +407,18 @@ export async function getWebfinger(domain, account) {
   // }
 
   let webfingerUrl = new URL(
-    "https://" + domain + "/.well-known/webfinger");
-  webfingerUrl.searchParams.set("resource", "acct:" + account + "@" + domain);
+    "https://" + instance + "/.well-known/webfinger");
+  webfingerUrl.searchParams.set("resource", "acct:" + username + "@" + instance);
 
   let webfinger = await fetch(webfingerUrl).then(result => {
-    console.log("getWebfinger", { webfingerUrl, result });
+    // console.log("getWebfinger", { webfingerUrl, result });
     return result.json();
   });
   console.log("getWebfinger", { webfingerUrl, webfinger });
   return webfinger;
 }
 
-export async function getWebfingerProfile(domain, account) {
-  let webfinger = await getWebfinger(domain, account);
+export function getProfileFromWebfinger(webfinger) {
   console.log("getWebfingerProfile", { webfinger });
 
   let profileUrls = get(webfinger, "links");
@@ -396,9 +439,13 @@ export async function getWebfingerProfile(domain, account) {
   return profileUrl;
 }
 
-export async function getWebfingerAccount(domain, account) {
-  let webfinger = await getWebfinger(domain, account);
+export async function getWebfingerProfile(instance, username) {
+  let webfinger = await getWebfinger(instance, username);
+  console.log("getWebfingerProfile", { webfinger });
+  return getProfileFromWebfinger(webfinger);
+}
 
+export function getAccountFromWebfinger(webfinger) {
   let subject = get(webfinger, "subject");
 
   if (!subject) {
@@ -407,6 +454,12 @@ export async function getWebfingerAccount(domain, account) {
   } else {
     return subject.split(":")[1];
   }
+}
+
+export async function getWebfingerAccount(instance, username) {
+  let webfinger = await getWebfinger(instance, username);
+  console.log("getWebfingerAccount", { webfinger });
+  return getAccountFromWebfinger(webfinger);
 }
 
 export async function toggleMastodonUrl(url) {
@@ -431,12 +484,12 @@ export async function toggleMastodonUrl(url) {
   //     - shouldn't occur, but if it does, follow 2. hopefully impossible.
   //   4 remote to remote mastodon.social to infosec.exchange
   //     - "show original" on remote, follow 2 if possible
-  // console.log("toggleMastodonUrl", url);
+  console.log("toggleMastodonUrl", url);
   let urlExploded = explodeUrlNoHandler(
     changeMastodonUriToUrl(url.toString()));
   let [hostDomain, handle, status] = urlExploded;
   let subpath = urlExploded.slice(3).join("/");
-  // console.log({ hostDomain, handle, status, subpath });
+  console.log({ hostDomain, handle, status, subpath });
 
   if (handle && handle[0] == "@") {
     let [username, remoteDomain] = handle.split("@").slice(1);
@@ -448,17 +501,34 @@ export async function toggleMastodonUrl(url) {
 
       if (remoteDomain && remoteDomain != instance) {
 
+        let profileUrl = await getWebfingerProfile(remoteDomain, username);
+        let [ profileUsername, profileDomain ] = profileUrl.split("/").slice(-1)[0].split("@");
+        let settings = { accounts: [
+          { instance: remoteDomain, username: username },
+          { instance: profileDomain, username: profileUsername }
+        ] };
+
         if (status) {
           // console.log("toggleMastodonUrl", "local to remote", "status");
           let results = await statuses(status);
           // console.log(results);
           let statusUrl = get(results, "url");
-          return mastodonUrlResult(statusUrl);
+          if (!statusUrl) {
+            return;
+          }
+          settings.statuses = [
+            { instance: remoteDomain, id: status },
+            { instance: new URL(statusUrl).host, id: statusUrl.split("/").slice(-1)[0].trim("/") }
+          ];
+          if (subpath) {
+            statusUrl += "/" + subpath;
+          }
+          // console.log("toggleMastodonUrl", { statusUrl, settings });
+          return mastodonUrlResult(statusUrl, settings);
 
         } else {
           // console.log("toggleMastodonUrl", "local to remote", "account");
-          let profileUrl = await getWebfingerProfile(remoteDomain, username);
-          return mastodonUrlResult(profileUrl);
+          return mastodonUrlResult(profileUrl, settings);
         }
 
       } else {
@@ -469,6 +539,22 @@ export async function toggleMastodonUrl(url) {
       }
 
     } else {
+      // console.log("toggleMastodonUrl", "remote to local");
+      let settings = { accounts: [], statuses: [] };
+      let domain = remoteDomain || hostDomain;
+      let webfinger = await getWebfinger(domain, username);
+
+      let profileUrl = getProfileFromWebfinger(webfinger);
+      let profileUsername = profileUrl.split("/").slice(-1)[0].split("@")[0];
+      let profileDomain = new URL(profileUrl).host;
+
+      let webAccount = getAccountFromWebfinger(webfinger);
+      let [webUsername, webDomain] = webAccount.split("@");
+
+      settings.accounts.push(
+        { instance: domain, username, type: "url" },
+        { instance: webDomain, username: webUsername, type: "webfinger-account" },
+      );
 
       if (status) {
         // console.log("toggleMastodonUrl", "remote to local", "status");
@@ -487,10 +573,14 @@ export async function toggleMastodonUrl(url) {
           if (result) {
             // todo: probably a bug related to
             // webfinger and activitypub here
-            let domain = remoteDomain ||  hostDomain;
+            settings.statuses.push(
+              { instance: hostDomain, id: status, type: "url-host" },
+              { instance: instance, id: result.id, type: "local" }
+            );
+
             let localUrl = makeMastodonUrl(
-              instance, username, domain, result.id, subpath);
-            // console.log("toggleMastodonUrl", "use local", localUrl);
+              instance, username, domain, result.id, subpath, settings);
+            // console.log("toggleMastodonUrl", "use local", { localUrl, settings });
 
             return localUrl;
           } else {
@@ -503,13 +593,10 @@ export async function toggleMastodonUrl(url) {
           // TODO: if all-url, try to find status on remote
         }
       } else {
-        console.log("toggleMastodonUrl", "remote to local", "account");
-        let domain = remoteDomain ||  hostDomain;
-        let account = await getWebfingerAccount(domain, username);
-        let [webUsername, webDomain] = account.split("@");
+        // console.log("toggleMastodonUrl", "remote to local", "account");
         let localUrl = makeMastodonUrl(
-          instance, webUsername, webDomain, null, subpath);
-        console.log("toggleMastodonUrl", "use local", localUrl);
+          instance, webUsername || username, webDomain || domain, null, subpath, settings);
+        // console.log("toggleMastodonUrl", "use local", { localUrl, settings });
 
         return localUrl;
       }
@@ -530,8 +617,8 @@ export async function setToken(code) {
   const formData = new FormData();
   formData.append("grant_type", "authorization_code");
   formData.append("code", code);
-  // console.log(JSON.stringify([cache, url, formData, code]));
-  // console.log(cache);
+  console.log(JSON.stringify([cache, url, formData, code]));
+  console.log(cache);
   formData.append("client_id", cache.client_id);
   formData.append("client_secret", cache.client_secret);
   formData.append("redirect_uri", getRedirectUri());
@@ -572,6 +659,7 @@ export async function toggleMastodonTab(tab, settings) {
         return;
       }
       let url = get(result, "url");
+      let status = get(settings, "status");
       // console.log("toggleMastodonUrl", "pending jump", url);
 
       if (
@@ -580,8 +668,11 @@ export async function toggleMastodonTab(tab, settings) {
         url != tab.pendingUrl &&
         (!cache.lastUrl || url != cache.lastUrl) &&
         (
-          get(settings, "status") == "onClicked" ||
-          cache.lastUrls.slice(-1).filter(u => u.url == url).length == 0
+          (status && status.startsWith("onClicked")) ||
+          (
+            cache.lastUrls.length < 2 ||
+            cache.lastUrls.slice(-2,-1)[0].urls.filter(u => u.url == url).length == 0
+          )
         )
       ) {
         if (
@@ -592,10 +683,11 @@ export async function toggleMastodonTab(tab, settings) {
           cache.lastUrls = [];
         }
 
-        cache.lastUrls.push({urls:[url, tab.url], timestamp: Date.now()});
+        let accounts = get(result, "accounts");
+        cache.lastUrls.push({urls:[url, tab.url], accounts: accounts, timestamp: Date.now()});
         cache.lastUrl = url;
 
-        return sendUrlToTab(url);
+        return sendUrlToTab(url, { tab });
 
       } else {
         // console.log("toggleMastodonTab: no jump", { url });
@@ -604,7 +696,7 @@ export async function toggleMastodonTab(tab, settings) {
 }
 
 export async function onInstalled(reason) {
-  // console.log("onInstalled", reason);
+  console.log("onInstalled", reason);
   if (![
     chrome.runtime.OnInstalledReason.BROWSER_UPDATE,
     chrome.runtime.OnInstalledReason.CHROME_UPDATE,
@@ -636,9 +728,9 @@ function filterObject(obj, callback) {
 }
 
 export async function syncLocalWithFollowsCsv() {
-  // console.log("syncLocalWithFollowsCsv");
+  console.log("syncLocalWithFollowsCsv");
   let instance = await getInstance();
-  // console.log("syncLocalWithFollowsCsv", instance);
+  console.log("syncLocalWithFollowsCsv", instance);
   // console.log("syncLocalWithFollowsCsv", cache);
   // console.log("syncLocalWithFollowsCsv", await getStorage());
   if (instance) {
@@ -668,7 +760,7 @@ export async function syncLocalWithFollowsCsv() {
 }
 
 export async function onChanged(changes, namespace) {
-  // console.log("onChanged", { changes, namespace, cache, storage: await getStorage() });
+  console.log("onChanged", { changes, namespace, cache, storage: await getStorage() });
 
   if (!cache.follows) {
     await syncLocalWithFollowsCsv();
@@ -686,14 +778,14 @@ export async function onChanged(changes, namespace) {
   // }
   // cache[namespace]["lastSyncPartial"] = new Date();
   // cache["lastSyncPartial"] = new Date();
-  // console.log("onChanged", { cache });
+  console.log("onChanged", { cache });
 };
 
 export async function onClicked(tab) {
   let version = await getStorageVersion();
 
   let instance = await getInstance({ noHttps: true });
-  // console.log("onClicked", { version, tab, versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(), instance, cache, storage: await getStorage() });
+  console.log("onClicked", { version, tab, versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(), instance, cache, storage: await getStorage() });
 
   if (version === versionWhichSignifiesFirstRunIsNeeded()){
     // console.log("onClicked", "versionWhichSignifiesFirstRunIsNeeded");
@@ -742,7 +834,8 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
           if (result && (result.url || result.pendingUrl)) {
             Object.assign(result, { currentTab: true });
-            tab = result;
+            return onUpdated(tabId, changeInfo, result);
+
           } else {
             // console.log("onUpdated", "currentTab has no url", { tabId, changeInfo, tab });
             return;
@@ -751,18 +844,34 @@ export async function onUpdated(tabId, changeInfo, tab) {
       }
     }
 
+    if (!tab.url) {
+      // console.log("onUpdated", "no tab.url");
+      return;
+    }
+
     if (tab.url.indexOf("https://") !== 0 && tab.url.indexOf("http://") !== 0) {
       // console.log("onUpdated", "not http(s)", tab.url);
       return;
     }
-    // console.log("onUpdated", "init", tab.url);
+
+    if (tab.url.indexOf("chrome://") === 0) {
+      // console.log("onUpdated", "chrome://", tab.url);
+      return;
+    }
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
       // console.log("onUpdated", "code redirect", tab.url);
       // TODO: handle code redirect here.
     }
 
-    let timeBetweenUpdates = 800 * 1;
+    if (tab.url.indexOf("@") === -1) {
+      // console.log("onUpdated", "no @", tab.url);
+      return;
+    }
+
+    // console.log("onUpdated", "init", tab.url);
+
+    let timeBetweenUpdates = 1200 * 1;
     let timestamp = new Date();
 
     if (!cache) { cache = {}; }
@@ -776,7 +885,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
     if (instance) {
 
-      if (tab.url.indexOf(cache.InstanceHttps) > -1) {
+      if (tab.url.indexOf(instance) > -1) {
         // console.log("onUpdated", "url is local", tab.url);
 
         if (tab.url.indexOf("@") > -1 && tab.url.split("@").length > 2) {
@@ -872,14 +981,14 @@ export async function onUpdated(tabId, changeInfo, tab) {
         let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1];
 
         if (lastUrlData.urls.some(url => url === tab.url)) {
-          let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 5;
+          let timeBetweenUpdatesForSameUrlAndIsLastUrl = 1000 * 8;
 
           if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
             // console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
             return;
           }
         }
-        let timeBetweenUpdatesForSameUrl = 1000 * 4;
+        let timeBetweenUpdatesForSameUrl = 1000 * 5;
 
         if (
             cache.lastUrls.some(lastUrl =>
@@ -902,7 +1011,6 @@ export async function onUpdated(tabId, changeInfo, tab) {
       // console.log("onUpdated", "settings", settings);
 
       return toggleMastodonTab(tab, settings);
-
     }
   }
 }
@@ -923,7 +1031,7 @@ async function syncContextMenus() {
 async function checkFollows(url, settings) {
   let keys = ["InstanceHttps", "InstanceClean", "follows"];
   let result = await getStorage(keys);
-  // console.log("content.js", "checkFollows", result.InstanceHttps, result);
+  console.log("content.js", "checkFollows", result.InstanceHttps, result);
 
   if (url && result && keys.every((key) => key in result)) {
     url = new URL(url);
@@ -933,44 +1041,65 @@ async function checkFollows(url, settings) {
 
     } else {
       // console.log("content.js", "not on instance page");
+
       let instance = url.hostname.replace(url.protocol + "//", "");
       let path = url.pathname.split("/").filter((item) => item !== "");
       // console.log("content.js", "url", url, instance, path);
+
       if (path.length > 2) {
         // console.log("content.js", "path too long, not a profile page");
         // console.log("content.js", "path", path);
+
       } else {
         let handle = path[0];
 
         if (handle.startsWith("@")) {
           handle = handle.substring(1);
         }
+
         let handleSplit = handle.split("@");
 
+        let username = handleSplit[0];
+
         if (handleSplit.length > 1) {
-          handle = handleSplit[0];
           instance = handleSplit[1];
         }
-        let account = handle + "@" + instance;
-        // console.log("content.js", "handle", {handle, instance, result, cache});
+
+        let account = username + "@" + instance;
+        // console.log("content.js", "handleSplit", {username, instance, result, cache});
 
         if (account in result.follows.content) {
           // console.log("content.js", "account in follows", account);
           return result.InstanceHttps + "@" + account;
+
         } else {
           // console.log("content.js", "account not in follows", account, result.follows);
 
-          if (Date.now() - result.follows.timestamp > 1000 * 60) {
+          let webAccount = await getWebfingerAccount(instance, username);
+          let [webAccountUsername, webAccountInstance] = webAccount.split("@");
+
+          if (webAccount in result.follows.content) {
+            // console.log("content.js", "webAccount in follows", webAccount);
+            return result.InstanceHttps + "@" + webAccount;
+
+          } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
             // console.log("content.js", "follows is too old", result.follows.timestamp);
             await syncLocalWithFollowsCsv();
+
             if (account in result.follows.content) {
               // console.log("content.js", "account in follows now", account);
               return result.InstanceHttps + "@" + account;
+
+            } else {
+              // console.log("content.js", "account not in follows now", account);
             }
+          } else {
+            // console.log("content.js", "follows is not too old", result.follows.timestamp);
           }
         }
       }
     }
+
   } else if (!get(settings, "noSync")) {
     // console.log("content.js", "invalid", { result, keys, url });
     await syncLocalWithFollowsCsv();
@@ -1000,7 +1129,7 @@ export async function sendMessage(tabId, response, settings) {
     Object.assign(response, { content: copy });
   }
 
-  // console.log("sendMessage", { tabId, response, settings });
+  console.log("sendMessage", { tabId, response, settings });
   return chrome.tabs.sendMessage(tabId, response);
 }
 
@@ -1031,7 +1160,7 @@ export async function onMessage(message, sender, sendResponse) {
   Object.assign(response.parent.sender, sender);
   Object.assign(response.parent.sendResponse, sendResponse);
 
-  // console.log("onMessage", message, sender, sendResponse, response);
+  console.log("onMessage", message, sender, sendResponse, response);
 
   if (message.type == "getStorage") {
     Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
@@ -1054,8 +1183,10 @@ export async function onMessage(message, sender, sendResponse) {
 
   } else if (message.type == "echoRequest") {
     sendMessage(sender.tab.id, response, { type: "echoResponse" });
+
   } else if (message.type == "syncLocalWithFollowsCsv") {
     syncLocalWithFollowsCsv();
+
   } else {
     // console.log("onMessage", "Unknown message type", message.type, message);
   }
@@ -1073,12 +1204,12 @@ export function onAlarm(alarm) {
 
 chrome.action.onClicked.addListener(onClicked);
 
-chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 5});
-chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 1});
+chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 3});
+chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 2});
 chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  // console.log("contextMenus.onClicked", info, tab);
+  console.log("contextMenus.onClicked", info, tab);
   if (info.menuItemId == "context") {
     await onClicked(tab);
   }
@@ -1091,7 +1222,7 @@ chrome.storage.onChanged.addListener(onChanged);
 
 chrome.tabs.onUpdated.addListener(onUpdated);
 
-// console.log("background.js", "loaded");
+console.log("background.js", "loaded");
 
 (() => (async () => {
     // console.log("background.js", "syncing.");
@@ -1103,4 +1234,4 @@ chrome.tabs.onUpdated.addListener(onUpdated);
     // console.log("background.js", "synced cache with storage");
   })())();
 
-// console.log("background.js", "done");
+console.log("background.js", "done");
