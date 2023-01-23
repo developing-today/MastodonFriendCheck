@@ -281,6 +281,12 @@ export function mastodonUrlResult(url, settings) {
 export function makeMastodonUrl(
   local, username, remote, status, subpath, settings
 ) {
+  // TODO: clean local url, determine difference between built and url-host
+  // "@paeneultima@thedreaming.city"
+  // {instance: 'thedreaming.city', id: '109660728945403082', type: 'built'}
+  // {instance: 'thedreaming.city', id: '109660728919305576', type: 'url-host'}
+  // {instance: 'https://hachyderm.io/', id: '109660728945403082', type: 'local'
+  // determine why this one cant be found what do then https://thedreaming.city/@paeneultima/109733736814167269
   let url = [
     makeHttps(local).slice(0, -1),
     "@" + username
@@ -345,6 +351,7 @@ export function makeMastodonUrl(
 }
 
 export function changeMastodonUriToUrl(url) {
+  // something something webfinger
   if (url.indexOf("/users/") > -1) {
     url = url.replace("/users/", "/@");
   }
@@ -382,7 +389,7 @@ export async function getLocality(url, settings) {
     let { username, remoteDomain } = handle.split("@").slice(1);
     if (remoteDomain) {
       doubleRemote = true;
-    }
+    } // bugged?
   }
   let instanceClean = get(settings, "instanceClean",
       {default: await getInstance({ clean: true })});
@@ -491,7 +498,7 @@ export async function getWebfingerAccount(instance, username) {
   return account.join("@");
 }
 
-export async function toggleMastodonUrl(url) {
+export async function toggleMastodonUrl(url, settings) {
   // remote: https://mastodon.social/@elonjet
   // local:  https://hachyderm.io/@elonjet@mastodon.social
 
@@ -518,6 +525,16 @@ export async function toggleMastodonUrl(url) {
     changeMastodonUriToUrl(url.toString()));
   let [hostDomain, handle, status] = urlExploded;
   let subpath = urlExploded.slice(3).join("/");
+  if (!settings) {
+    settings = { accounts: [], statuses: [] };
+  }
+  if (!settings.accounts) {
+    settings.accounts = [];
+  }
+  if (!settings.statuses) {
+    settings.statuses = [];
+  }
+
   console.log("toggleMastodonUrl", { hostDomain, handle, status, subpath });
 
   if (handle && handle[0] == "@") {
@@ -532,10 +549,20 @@ export async function toggleMastodonUrl(url) {
 
         let profileUrl = await getWebfingerProfile(remoteDomain, username);
         let [ profileUsername, profileDomain ] = profileUrl.split("/").slice(-1)[0].split("@");
-        let settings = { accounts: [
+        // let settings = { accounts: [
+        //   { instance: remoteDomain, username: username , type: "remote" },
+        //   { instance: profileDomain, username: profileUsername, type: "webfinger-profile" }
+        // ] };
+        let accountsArray = [
           { instance: remoteDomain, username: username , type: "remote" },
           { instance: profileDomain, username: profileUsername, type: "webfinger-profile" }
-        ] };
+        ];
+        if (settings.accounts && !Array.isArray(settings.accounts)) {
+          settings.accounts = [settings.accounts];
+        } else if (!settings.accounts) {
+          settings.accounts = [];
+        }
+        settings.accounts = settings.accounts.concat(accountsArray);
 
         if (status) {
           console.log("toggleMastodonUrl", "local to remote", "status");
@@ -574,7 +601,6 @@ export async function toggleMastodonUrl(url) {
     } else {
       console.log("toggleMastodonUrl", "remote to local");
 
-      let settings = { accounts: [], statuses: [] };
       let domain = remoteDomain || hostDomain;
       let webfinger = await getWebfinger(domain, username);
       console.log("toggleMastodonUrl", { webfinger, domain, username, settings });
@@ -629,12 +655,12 @@ export async function toggleMastodonUrl(url) {
             console.log("toggleMastodonUrl", "use local", { localUrl, settings });
             return localUrl;
           } else {
-            console.log("toggleMastodonUrl", "no result");
+            console.log("toggleMastodonUrl", "no result", { result, results });
             // TODO: if all-url, try to find status on remote
           }
 
         } else {
-          console.log("toggleMastodonUrl", "no results");
+          console.log("toggleMastodonUrl", "no results", { results });
           // TODO: if all-url, try to find status on remote
         }
       } else {
@@ -698,7 +724,7 @@ export async function toggleMastodonTab(tab, settings) {
   cache.lastUrls.push({urls:[tab.url], timestamp: Date.now()});
   cache.lastUrl = tab.url;
 
-  return toggleMastodonUrl(tab.url).then(async result => {
+  return toggleMastodonUrl(tab.url, settings).then(async result => {
       if (!result) {
         console.log("toggleMastodonTab: no result");
         return;
@@ -942,6 +968,9 @@ export async function onUpdated(tabId, changeInfo, tab) {
       return;
     }
     let instance = await getInstance();
+    let locality = null;
+    let pageType = null;
+
     console.log("onUpdated", "instance", instance);
 
     if (instance) {
@@ -952,7 +981,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
         if (tab.url.indexOf("@") > -1 && tab.url.split("@").length > 2) {
           console.log("onUpdated", "remote user", tab.url);
 
-          let locality = "local";
+          locality = "local";
 
           let jumpStatus = await getStorageProperty("AutoJumpOnLoadStatus");
           let statusDropdown = await getStorageProperty("AutoJumpOnLoadStatusDropdown");
@@ -965,7 +994,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
                     (accountDropdown == "first-opened" || locality.startsWith(accountDropdown));
 
           let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
-          let pageType = getPageType(urlExplode);
+          pageType = getPageType(urlExplode);
 
           console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
 
@@ -980,10 +1009,10 @@ export async function onUpdated(tabId, changeInfo, tab) {
               )
             )
           ) {
-            console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
+            console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
 
           } else {
-            console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
+            console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
             return;
           }
         }
@@ -991,20 +1020,34 @@ export async function onUpdated(tabId, changeInfo, tab) {
       } else {
         console.log("onUpdated", "url is not local", tab.url);
 
-        let locality = "remote";
+        locality = "remote";
+
+        let urlSplit = tab.url.split("@");
+        if (urlSplit.length > 2) {
+          console.log("onUpdated", "double remote detected", tab.url);
+          locality = "remote-remote";
+        }
 
         let jumpStatus = await getStorageProperty("AutoJumpOnLoadStatus");
         let statusDropdown = await getStorageProperty("AutoJumpOnLoadStatusDropdown");
         let statusDropdownMatches = jumpStatus && statusDropdown &&
-                  (statusDropdown == "first-opened" || locality.startsWith(statusDropdown));
+                  (
+                    statusDropdown == "first-opened" ||
+                    locality == "remote-remote" ||
+                    locality.startsWith(statusDropdown)
+                  );
 
         let jumpAccount = await getStorageProperty("AutoJumpOnLoadAccount");
         let accountDropdown = await getStorageProperty("AutoJumpOnLoadAccountDropdown");
         let accountDropdownMatches = jumpAccount && accountDropdown &&
-                  (accountDropdown == "first-opened" || locality.startsWith(accountDropdown));
+                  (
+                    accountDropdown == "first-opened" ||
+                    locality == "remote-remote" ||
+                    locality.startsWith(accountDropdown)
+                  );
 
         let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
-        let pageType = getPageType(urlExplode);
+        pageType = getPageType(urlExplode);
 
         console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
 
@@ -1019,10 +1062,10 @@ export async function onUpdated(tabId, changeInfo, tab) {
             )
           )
         ) {
-          console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
 
         } else {
-          console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
           return;
         }
       }
@@ -1069,6 +1112,11 @@ export async function onUpdated(tabId, changeInfo, tab) {
       cache.lastTabUpdated = timestamp;
 
       let settings = changeInfo
+      settings.tabId = tabId;
+      settings.tab = tab;
+      settings.timestamp = timestamp;
+      settings.locality = locality;
+      settings.pageType = pageType;
       console.log("onUpdated", "settings", settings);
 
       return toggleMastodonTab(tab, settings);
