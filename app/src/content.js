@@ -122,7 +122,6 @@ function fixFollowButton(button, url) {
   console.log("content.js", "fixFollowButton", "fixing follow button", button, url);
   let buttonA = document.createElement("a");
   buttonA.href = url;
-
   buttonA.innerHTML = "Following";
 
   button.classList.forEach((className) => {
