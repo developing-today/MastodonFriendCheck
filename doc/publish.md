@@ -1,7 +1,11 @@
 To prepare for publish:
 
 ```
-Compress-Archive src publish.zip
+go to each .js file and then comment out all console.log and counter++ lines.
+```
+then run this from repo root
+```
+Compress-Archive app publish.zip
 
 ```
 
