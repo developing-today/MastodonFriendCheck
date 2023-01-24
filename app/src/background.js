@@ -6,8 +6,7 @@ export function versionWhichSignifiesFirstRunIsNeeded() {
 
 export function get(object, property, settings) {
   // console.log("get", { object, property, settings });
-  let defaultValue = settings ?
-    get(settings, "default") : null;
+  let defaultValue = settings ? get(settings, "default") : null;
 
   let resultCond = object &&
       property &&
