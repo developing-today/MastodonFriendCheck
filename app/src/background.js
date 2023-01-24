@@ -778,17 +778,14 @@ export async function toggleMastodonTab(tab, settings) {
   cache.lastUrls.push({urls:[tab.url], timestamp: Date.now()});
   cache.lastUrl = tab.url;
 
-  let isDoubleRemote = get(settings, "locality") == "remote-remote";
-
   return toggleMastodonUrl(tab.url, settings).then(async result => {
       if (!result) {
         console.log("toggleMastodonTab", "no result");
         return;
       }
 
-      if (isDoubleRemote) {
+      if (get(settings, "locality") == "remote-remote") {
         console.log("toggleMastodonTab", "double remote", { result, tab, settings });
-        isDoubleRemote = false;
         result = await toggleMastodonUrl(result.url, settings);
         console.log("toggleMastodonTab", "double remote result", { result, tab, settings });
       }
