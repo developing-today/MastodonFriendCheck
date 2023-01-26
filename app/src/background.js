@@ -359,7 +359,9 @@ export function makeMastodonUrl(
 }
 
 export function changeMastodonUriToUrl(url) {
-  // something something webfinger
+  // todo something something webfinger
+  // todo something something pleroma '/notices/<id>'
+  //      will need to be able to handle id without handle, probably okay with search
   if (url.indexOf("/users/") > -1) {
     url = url.replace("/users/", "/@");
   }
