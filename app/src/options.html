@@ -3,7 +3,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <head>
     <script type="module" src="./options.js"></script>
-    <title>Mastodon Friend Checker</title>
+    <title>Mastodon Friend Check</title>
     <style>
       body {
       	text-align: center;
@@ -48,9 +48,9 @@
       <div>
         Options:<br>
         <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false>Open In New Tab</input><br>
-        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false>Auto-Jump On-Load [copypaste-prompt]</input><br>
+        <input type="checkbox" class="options disabled" id="Following" name="Following" value=false>Follow>Following</input><br>
 
-        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadAccount" name="AutoJumpOnLoadAccount" value=false disabled=true>Auto-Jump On-Load [account]</input><br>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadAccount" name="AutoJumpOnLoadAccount" value=false disabled=true>Auto-Jump [account]</input><br>
         <label class="note" for="AutoJumpOnLoadAccountDropdown">When:</label>
         <select class="inner-note" id="AutoJumpOnLoadAccountDropdown" name="AutoJumpOnLoadAccountDropdown" value=false disabled=true>
           <option value="remote"disabled=true>Remote</option>
@@ -58,7 +58,7 @@
           <option value="first-opened" disabled=true>First Opened</option>
         </select><br>
 
-        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadStatus" name="AutoJumpOnLoadStatus" value=false disabled=true>Auto-Jump On-Load [status]</input><br>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadStatus" name="AutoJumpOnLoadStatus" value=false disabled=true>Auto-Jump [status]</input><br>
         <label class="note" for="AutoJumpOnLoadStatusDropdown">When:</label>
         <select class="inner-note" id="AutoJumpOnLoadStatusDropdown" name="AutoJumpOnLoadStatusDropdown" value=false disabled=true>
           <option value="local" disabled=true>Local</option>
@@ -67,17 +67,28 @@
         </select><br>
       </div>
       <div>
-        Additional Features: [beta]<br>
-        <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false>Grant Read-Write[all-url] (popup on-check)</input><br>
-        <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false>Grant OAuth (url will open on-check)</input><br>
-        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false>Update Post Stats[requires::read-write]</input><br>
-        <input type="checkbox" class="options disabled" id="Following" name="Following" value=false>Follow>Following[requires::oauth,read-write]</input><br>
+        Extra Settings: <br>
+        <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false>Grant Write [all-url] (popup)</input><br>
+        <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false>Grant OAuth (new tab)</input><br>
+        <!--
+          todo:
+            consider oauth window.open in current tab,
+            then return to settings either way
+            this would rely on update oauth listener setup to
+              check if code is set for [url] and
+                if yes, update true
+                if not, update false
+        -->
       </div>
       <div>
-        On Extension Button Click:<br>
-        <input type="checkbox" class="options disabled" id="OnClickedToggle"  name="OnClickedToggle" value=false>Toggle Mastodon Page</input><br>
-        <input type="checkbox" class="options disabled" id="OnClickedReadWrite"  name="OnClickedReadWrite" value=false>Request Grant Read-Write[per-site]</input><br>
-        <div class="note">(fyi: all-url is preferred over per-site)</div>
+        Additional Features: [beta]<br>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false>Auto-Jump [copy-prompt]</input><br>
+        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false>Update Stats {read-write}</input><br>
+        <input type="checkbox" class="options disabled" id="FollowListener" name="FollowListener" value=false>Remote Follow {oauth}</input><br>
+        <input type="checkbox" class="options disabled" id="OnClickedToggle"  name="OnClickedToggle" value=false>Jump Extension Button</input><br>
+        <input type="checkbox" class="options disabled" id="ContextMenu" name="ContextMenu" value=false>Jump Context Menu</input><br>
+        <input type="checkbox" class="options disabled" id="HotKey" name="HotKey" value=false>Jump HotKey</input><br>
+        <button class="options disabled" id="hotkeyButton">Assign HotKey</button>
       </div>
     </div>
   </body>

@@ -8,14 +8,15 @@ export function get(object, property, settings) {
   // console.log("get", { object, property, settings });
   let defaultValue = settings ? get(settings, "default") : null;
 
-  let resultCond = object &&
+  let resultCondition = object &&
       property &&
-      object.hasOwnProperty(property) &&
+      typeof object === "object" &&
+      property in object &&
       object[property] !== undefined &&
       object[property] !== null
-  let result = resultCond ? object[property] : defaultValue;
+  let result = resultCondition ? object[property] : defaultValue;
 
-  // console.log("get", { resultCond, defaultValue, result });
+  // console.log("get", { resultCondition, defaultValue, result });
   return result;
 }
 
@@ -117,8 +118,8 @@ export async function getStorageProperty(name) {
   return result[name];
 }
 
-export function createTab(url, settings) {
-  console.log("createTab:", { url });
+export function newTab(url, settings) {
+  console.log("newTab:", { url });
   chrome.tabs.create({ url: url });
 }
 
@@ -142,8 +143,14 @@ export function updateTab(url, settings) {
 export async function sendUrlToTab(url, settings) {
   console.log("sendUrlToTab", {url, settings});
   if (url) {
-    if (get(settings, "OpenInNewTab") || await getStorageProperty("OpenInNewTab")) {
-      createTab(url, settings);
+    if (
+      get(
+        settings,
+        "OpenInNewTab",
+        { default: await getStorageProperty("OpenInNewTab") }
+      )
+    ) {
+      newTab(url, settings);
     } else {
       updateTab(url, settings);
     }
@@ -172,10 +179,14 @@ export async function setStorage(object, settings) {
 
   if (get(settings, "local")) {
     console.log("setStorage local", object);
-    return chrome.storage.local.set(object);
+    let result = await chrome.storage.local.set(object);
+    console.log("setStorage local result", result);
+    return object;
   } else {
     console.log("setStorage sync", object);
-    return chrome.storage.sync.set(object);
+    let result = await chrome.storage.sync.set(object);
+    console.log("setStorage sync result", result);
+    return object;
   }
 }
 
@@ -243,27 +254,32 @@ export function getCodeRedirectPath() {
   return "oauth/authorize/native";
 }
 
-export async function setCode(url) { // TODO:
-  // https://hachyderm.io/oauth/authorize?response_type=code&client_id=-cx14PEOeRBwp4CC6rHzcy3QTGC63Z5zY3G33CHEqtk&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&scope=write%3Afollows
-  // https://hachyderm.io/oauth/authorize/native?code=Ev5GQx8SdH0iMvgqZkKf-4PQG3CkrqSv1uROLwl4wIE
+export async function setCode(url, settings) { // TODO:
+  // https://hachyderm.io/oauth/authorize/native?code=6Z4BHNsk-ltNXBoMzlL_D28xYNE35ElYeXKTncATnbw
   let codeSplit = url.split("?");
   let instance = await getInstance();
 
+  console.log("setCode", {url, codeSplit, instance, settings});
   if (
     instance + getCodeRedirectPath() ==
     codeSplit[0]
   ) {
-    createTab(instance);
-    let code = codeSplit.split("=")[1];
-    return setStorageWithProperty("code", code);
+    console.log("setCode", "match", {url, codeSplit, instance, settings});
+    updateTab(instance, settings);
+    let code = codeSplit[1].split("=")[1];
+    console.log("setCode", "match", {code});
+    await setStorageWithProperty("code", code);
+    return code;
+  } else {
+    console.log("setCode", "no match", {url, codeSplit, instance, settings});
+    return;
   }
 }
 
 export async function getCode() {
-  return getStorage(["code"]).then(result => {
-
-    if (result && result.code) {
-      return result.code;
+  return getStorageProperty("code").then(result => {
+    if (result) {
+      return result;
     }
   });
 }
@@ -362,6 +378,39 @@ export function changeMastodonUriToUrl(url) {
   // todo something something webfinger
   // todo something something pleroma '/notices/<id>'
   //      will need to be able to handle id without handle, probably okay with search
+  // # TODO classifyMastodonUrl
+  //         // "*://*/@*",
+  //         // "*://*/users/*",
+  //         // "*://*/notices/*",
+  //         // "*://*/notes/*",
+  //         // "*://*/i/web/post/*",
+  //         // "*://*/i/web/profile/*",
+  //         // "*://*/web/statuses/*"
+
+  // explode url into parts
+  // compare parts to known instance types
+
+  // mastodon where status is a number
+  //   /@<user> or /@<user>/<status>
+  //   /users/<user> or /users/<user>/statuses/<status>
+  //   /web/accounts/<user> or /web/accounts/<user>/statuses/<status>
+
+  // pleroma where status is a string
+  //   /@<user> or /notices/<status>
+
+  // misskey where status is a string
+  //   /notes/<status>
+
+  // don't actually define 'this is from here' or whatever,
+  // that specific stuff probably can't be known just from url
+
+  // just define 'if it has /users/' get <user> from the next part
+  // if /i/web/profile/ get <user> from the next part
+  // if /i/web/post/ get <status> from the next part
+
+  // then return what was found and done
+  // and let the caller decide what to do with it
+
   if (url.indexOf("/users/") > -1) {
     url = url.replace("/users/", "/@");
   }
@@ -376,8 +425,7 @@ export function explodeUrlNoHandler(url) {
 }
 
 export async function statuses(id, settings) {
-  let instance = get(settings, "instance") ||
-                  await getInstance();
+  let instance = get(settings, "instance") || await getInstance();
 
   if (!instance || !id) { return; }
 
@@ -531,8 +579,7 @@ export async function toggleMastodonUrl(url, settings) {
   //   4 remote to remote mastodon.social to infosec.exchange
   //     - "show original" on remote, follow 2 if possible
   console.log("toggleMastodonUrl", url);
-  let urlExploded = explodeUrlNoHandler(
-    changeMastodonUriToUrl(url.toString()));
+  let urlExploded = explodeUrlNoHandler(changeMastodonUriToUrl(url.toString()));
   let [hostDomain, handle, id] = urlExploded;
   let subpath = urlExploded.slice(3).join("/");
   if (!settings) {
@@ -736,39 +783,81 @@ export async function toggleCurrentTab() {
 }
 
 export async function getToken() {
-  return getStorage("access_token");
+  let result = await getStorage("access_token");
+
+  if (result && result.access_token) {
+    return result.access_token;
+  } else {
+    return null;
+  }
 }
 
-export async function setToken(code) {
-  const url = new URL(await getInstance() + "oauth/token");
-  const formData = new FormData();
+export async function setToken(settings) {
+  let url = new URL(get(settings, "url", { default: await getInstance() + "oauth/token" }));
+  let code = get(settings, "code", { default: await getCode() });
+  let client_id = get(settings, "client_id", { default: await getStorageProperty("client_id") });
+  let client_secret = get(settings, "client_secret", { default: await getStorageProperty("client_secret") });
+  let redirect_uri = get(settings, "redirect_uri", { default: getRedirectUri() });
+  let scope = get(settings, "scope", { default: getAppPermissions() });
+
+  let formData = new FormData();
   formData.append("grant_type", "authorization_code");
   formData.append("code", code);
-  console.log(JSON.stringify([cache, url, formData, code]));
-  console.log(cache);
-  formData.append("client_id", cache.client_id);
-  formData.append("client_secret", cache.client_secret);
-  formData.append("redirect_uri", getRedirectUri());
-  formData.append("scope", getAppPermissions());
+  formData.append("client_id", client_id);
+  formData.append("client_secret", client_secret);
+  formData.append("redirect_uri", redirect_uri);
+  formData.append("scope", scope);
 
-  return fetch(url, { method: "POST", body: formData }
+  console.log("setToken", { url, code, client_id, client_secret, redirect_uri, scope });
+
+  let result = await fetch(url, { method: "POST", body: formData }
   ).then(result => result.json()
   ).then(result => {
     console.log("setToken", result);
     return result;
-  }).then(setStorage).then(result => result.access_token);
+  }).then(setStorage
+  ).then(result => result.access_token);
+
+  console.log("setToken", "result", result);
+
+  return result;
+}
+
+export async function verify(settings) {
+  let url = new URL(get(settings, "url", { default: await getInstance() + "api/v1/apps/verify_credentials" }));
+  let token = get(settings, "token", { default: await getToken() });
+
+  console.log("verify", { url, token });
+
+  let result = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  }).then(response => response.json());
+
+  console.log("verify", "result", result, { url, token });
+
+  return result;
 }
 
 export async function follow(id) {
   let url = new URL(
     await getInstance() + "api/v1/accounts/" + id + "/follow"
   );
-  return fetch(url, {
+
+  let token = await getToken();
+  console.log("follow", { id, url, token });
+
+  let result = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: "Bearer " + await getToken(),
+      Authorization: "Bearer " + token
     }
   }).then(response => response.json());
+  console.log("follow", "result", result, { id, url, token });
+
+  return result;
 }
 
 export function getPageType(urlExploded) {
@@ -874,7 +963,7 @@ export async function onInstalled(reason) {
     console.log("onInstalled", "syncCacheWithStorage", { reason });
     await syncCacheWithStorage();
     if (
-      await getCurrentVersion() !==
+      getCurrentVersion() !==
       await getStorageVersion() ||
       reason == "onClicked,noInstance"
     ) {
@@ -882,8 +971,8 @@ export async function onInstalled(reason) {
         console.log("onInstalled", "openOptionsPage");
         chrome.runtime.openOptionsPage();
       } else {
-        console.log("onInstalled", "createTab");
-        createTab(getChromeUrl("options.html"))
+        console.log("onInstalled", "newTab");
+        newTab(getChromeUrl("options.html"))
       }
     } else {
       console.log("onInstalled", "no version change");
@@ -898,24 +987,30 @@ function filterObject(obj, callback) {
 
 export async function syncLocalWithFollowsCsv() {
   console.log("syncLocalWithFollowsCsv");
+
   let instance = await getInstance();
   console.log("syncLocalWithFollowsCsv", instance);
   // console.log("syncLocalWithFollowsCsv", cache);
   // console.log("syncLocalWithFollowsCsv", await getStorage());
+
   if (instance) {
     // console.log("syncLocalWithFollowsCsv", instance);
+
     return fetch(instance + "settings/exports/follows.csv")
     .then(response => response.text()).then(text => {
       // console.log("syncLocalWithFollowsCsv text", text);
       let content = {};
       let lines = text.split("\n");
+
       lines.slice(1).map(line => {
         let account = line.split(",")[
           lines[0].split(",").indexOf("Account address")];
-        if (account) {
+
+          if (account) {
           content[account] = true;
         }
       });
+
       let timestamp = new Date();
       let follows = { timestamp, content };
       // console.log("syncLocalWithFollowsCsv content", follows);
@@ -1030,7 +1125,11 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
       console.log("onUpdated", "code redirect", tab.url);
-      // TODO: handle code redirect here.
+      let code = await setCode(tab.url, { tabId,changeInfo, tab });
+      let token = await setToken({code, tabId,changeInfo, tab });
+      let verifyResults = await verify({token, tabId,changeInfo, tab });
+      console.log("onUpdated", "code redirect", { code, token, verify });
+      return;
     }
 
     if (tab.url.indexOf("@") === -1) {
@@ -1105,6 +1204,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
         locality = "remote";
 
         let urlSplit = tab.url.split("@");
+
         if (urlSplit.length > 2) {
           console.log("onUpdated", "double remote detected", tab.url);
           locality = "remote-remote";
@@ -1161,6 +1261,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
         if (tab.url == cache.lastUrl) {
           console.log("onUpdated", "lastUrl was same", { lastUrl: cache.lastUrl, tabUrl: tab.url });
+
           return;
         }
 
@@ -1171,9 +1272,11 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
           if (lastUrlData.timestamp > timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl) {
             console.log("onUpdated", "lastUrl was too new", { lastUrlData, timestamp, timeBetweenUpdatesForSameUrlAndIsLastUrl });
+
             return;
           }
         }
+
         let timeBetweenUpdatesForSameUrl = 1000 * 5;
 
         if (
@@ -1183,6 +1286,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
             url.timestamp > timestamp - timeBetweenUpdatesForSameUrl))
           ) {
           console.log("onUpdated", "url was too new", { tab, timestamp, timeBetweenUpdatesForSameUrl, lastUrls: cache.lastUrls });
+
           return;
         }
       }
@@ -1242,6 +1346,7 @@ async function checkFollows(url, settings) {
         console.log("checkFollows", "path", path);
 
       } else {
+
         let handle = path[0];
 
         if (handle.startsWith("@")) {
@@ -1275,6 +1380,7 @@ async function checkFollows(url, settings) {
 
           } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
             console.log("checkFollows", "follows is too old", result.follows.timestamp);
+
             await syncLocalWithFollowsCsv();
 
             if (account in result.follows.content) {
@@ -1284,6 +1390,7 @@ async function checkFollows(url, settings) {
             } else {
               console.log("checkFollows", "account not in follows now", account);
             }
+
           } else {
             console.log("checkFollows", "follows is not too old", result.follows.timestamp);
           }
@@ -1293,7 +1400,9 @@ async function checkFollows(url, settings) {
 
   } else if (!get(settings, "noSync")) {
     console.log("checkFollows", "invalid", { result, keys, url });
+
     await syncLocalWithFollowsCsv();
+
     checkFollows(url, { noSync: true });
   }
 }
@@ -1325,6 +1434,7 @@ export async function sendMessage(tabId, response, settings) {
 }
 
 export async function onMessage(message, sender, sendResponse) {
+
   if (Array.isArray(message)) {
     return Promise.allSettled(message.map(m => onMessage(m, sender, sendResponse)));
   }
@@ -1360,6 +1470,29 @@ export async function onMessage(message, sender, sendResponse) {
   } else if (message.type == "setStorage") {
     await setStorage(message);
 
+  } else if (message.type == "follow") {
+
+    let searchResult = await search(sender.tab.url);
+    let accounts = get(searchResult, "accounts") || [];
+
+    if (accounts.length > 0) {
+      let account = accounts[0];
+      let id = account.id;
+
+      console.log("onMessage", "follow", "id", { id, account, accounts, searchResult, response, message, sender});
+
+      if (id) {
+        let verifyResult = await verify();
+        console.log("onMessage", "follow", "verify", verifyResult);
+        let result = await follow(id);
+        sendMessage(sender.tab.id, response, { type: "following", content: result });
+      } else {
+        console.log("onMessage", "follow", "no id", account);
+      }
+    } else {
+      console.log("onMessage", "follow", "no accounts", searchResult);
+    }
+
   } else if (message.type == "onLoad") {
     console.log("onMessage", "onLoad", message, sender, sendResponse, response);
 
@@ -1368,6 +1501,10 @@ export async function onMessage(message, sender, sendResponse) {
     if (url) {
       console.log("onMessage", "onLoad", "following", url);
       sendMessage(sender.tab.id, response, { type: "following", content: { url } });
+
+    } else {
+      console.log("onMessage", "onLoad", "not following", url);
+      sendMessage(sender.tab.id, response, { type: "notFollowing", content: { url } });
     }
 
     onUpdated(sender.tab.id, { status: "onMessage", onMessage: true, response }, sender.tab);
@@ -1381,13 +1518,16 @@ export async function onMessage(message, sender, sendResponse) {
   } else {
     console.log("onMessage", "Unknown message type", message.type, message);
   }
+
   return Promise.resolve();
 }
 
 export function onAlarm(alarm) {
   // console.log("onAlarm", alarm);
+
   if (alarm.name === "syncCacheWithStorage") {
     syncCacheWithStorage();
+
   } else if (alarm.name === "syncLocalWithFollowsCsv") {
     syncLocalWithFollowsCsv();
   }
@@ -1401,6 +1541,7 @@ chrome.alarms.onAlarm.addListener(onAlarm);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   console.log("contextMenus.onClicked", info, tab);
+
   if (info.menuItemId == "context") {
     await onClicked(tab);
   }
@@ -1417,12 +1558,22 @@ console.log("background.js", "loaded");
 
 (() => (async () => {
     console.log("background.js", "syncing");
+
     await syncContextMenus();
     console.log("background.js", "synced context menus");
+
     await syncLocalWithFollowsCsv();
     console.log("background.js", "synced local with follows csv");
+
     await syncCacheWithStorage();
     console.log("background.js", "synced cache with storage");
   })())();
 
 console.log("background.js", "done");
+// todo: when follow is clicked set it to pending
+// todo on follow click return
+//      url of home instance profile
+//      not same url clicked.
+// TODO: be able to edit profile while extension is enabled
+    //   don't add listener if not following and is instance
+  

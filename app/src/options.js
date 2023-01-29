@@ -1,20 +1,30 @@
 export function get(object, property, settings) {
+  console.log("get", { object, property, settings });
   let defaultValue = settings ? get(settings, "default") : null;
-  return object && property && property in object
-          && object[property] !== undefined && object[property] !== null
-          ? object[property] : defaultValue;
+
+  let resultCondition = object &&
+      property &&
+      typeof object === "object" &&
+      typeof property === "string" &&
+      property in object &&
+      object[property] !== undefined &&
+      object[property] !== null
+  let result = resultCondition ? object[property] : defaultValue;
+
+  console.log("get", "result", { resultCondition, defaultValue, result });
+  return result;
 }
 
 export function permissionRequiredInnerHTML() {
   return "Permission required.<br>Please try again.";
 }
 
-export function getAppPermissions() {
-  return "write:follows"; //"read:search read:follows";
+export async function getAppPermissions() {
+  return await getStorageProperty("scopes") || "write:follows"; //"read:search read:follows";
 }
 
-export function getRedirectUri() {
-  return "urn:ietf:wg:oauth:2.0:oob"
+export async function getRedirectUri() {
+  return await getStorageProperty("redirect_uri") || "urn:ietf:wg:oauth:2.0:oob";
 }
 
 export function keyPress(e) {
@@ -87,12 +97,13 @@ export async function getStorage(keys) {
   return result;
 }
 
-export async function getStorageProperty(name) {
+export async function getStorageProperty(name, defaultValue = null) {
   if (Array.isArray(name) && name.length > 0) {
     name = name[0];
   }
-  let result = await getStorage(name);
-  return result[name];
+  let result = await getStorage([name]);
+  console.log("getStorageProperty", { name, result, defaultValue });
+  return get(result, name, { default: defaultValue });
 }
 
 export function getCurrentVersion() {
@@ -114,24 +125,27 @@ export function setCurrentVersion() {
 }
 
 export async function getClientId() {
-  return getStorage(["client_id"]);
+  return getStorageProperty("client_id");
 }
 
 export async function getInstance(isNotForceHttps) {
 
   if (isNotForceHttps) {
-    return getStorage(["Instance"]).then(result => { return result.Instance; });
+    return getStorageProperty("Instance");
   } else {
-    return getStorage(["InstanceHttps"]).then(result => { return result.InstanceHttps; });
+    return getStorageProperty("InstanceHttps");
   }
 }
 
 export async function authorizeUser() {
-  // const url = new URL(await getInstance() + "oauth/authorize");
+  console.log("authorizeUser");
+  const url = new URL(await getInstance() + "oauth/authorize");
+  console.log("authorizeUser", url);
   url.searchParams.append("response_type", "code");
-  url.searchParams.append("client_id", await getClientId().then(result => result.client_id));
-  url.searchParams.append("redirect_uri", getRedirectUri());
-  url.searchParams.append("scope", getAppPermissions());
+  url.searchParams.append("client_id", await getClientId());
+  url.searchParams.append("redirect_uri", await getRedirectUri());
+  url.searchParams.append("scope", await getAppPermissions());
+  console.log("authorizeUser", url);
   newTab(url);
 }
 
@@ -174,7 +188,7 @@ export async function makeApp() {
       // {
       //   "client_id": "9xf8mdtqjJhlSgF2sEXAMPLEygPjmMfqrUILE49V3zQwQ",
       //   "id": "8675309",
-      //   "name": "Mastodon Friend Checker",
+      //   "name": "Mastodon Friend Check",
       //   "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
       //   "vapid_key": "PODTeC4QbxR2XyKrqeLxOBkMSZf32CJaEfcvnF1QwKow0o1qu4hoA4XYEXAMPLEh33MmEd0xbYkPzdsn4mm4cRY=",
       //   "website": "https://src.developing.today/MastodonFriendCheck"
@@ -182,20 +196,39 @@ export async function makeApp() {
 
   */
   console.log("Making App");
-  // const url = new URL((await getInstance()) + "api/v1/apps");
-  // const formData = new FormData();
-  formData.append("client_name", "Mastodon Friend Checker");
-  formData.append("redirect_uris", getRedirectUri());
-  formData.append("scopes", getAppPermissions()); // read:search read:follows
+  const url = new URL((await getInstance()) + "api/v1/apps");
+  const host = url.host;
+  const formData = new FormData();
+  const scopes = await getAppPermissions();
+  formData.append("client_name", chrome.runtime.getManifest().name);
+  formData.append("redirect_uris", await getRedirectUri());
+  formData.append("scopes", scopes); // read:search read:follows
   formData.append(
     "website",
     chrome.runtime.getManifest().homepage_url
   );
-  return fetch(url, {
+  console.log("makeApp", { url, formData });
+  let result = await fetch(url, {
     method: "POST",
     body: formData,
   }).then(result => result.json()
-  ).then(setStorage);
+  ).then(result => {
+    return result;
+  });
+  console.log("makeApp result", { result });
+
+  if (!result || result.error) {
+    console.error("makeApp error", { result });
+    return result;
+  }
+
+  let apps = await getStorageProperty("apps") || {};
+  let app = { host };
+  Object.assign(app, result);
+  apps[host] = app;
+  Object.assign(result, { app, apps, url, host, formData, scopes });
+  await setStorage(result);
+  return result;
 }
 
 export async function onResult() {
@@ -278,7 +311,7 @@ export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, eleme
     console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
     await setOauthOption(false);
   }
-  window.location.reload(); // comment out during development
+  // window.location.reload(); // comment out during development
 }
 
 export async function ifTrueThenInitializeMastodonExtension(option, element, settings) {
@@ -292,7 +325,7 @@ export async function ifTrueThenInitializeMastodonExtension(option, element, set
     console.log("ifTrueThenInitializeMastodonExtension", "unchecked");
     await setOauthOption(false);
   }
-  window.location.reload(); // comment out during development
+  // window.location.reload(); // comment out during development
 }
 // # todo setup oauth to contain url in settings and reuse indefinitely whnever getinstance matches
 // # todo setup urls for toggle to include more information, where it was called, tally of times called, tally of times toggle
@@ -308,7 +341,7 @@ export async function onClicked() {
     ).then(() => setCurrentVersion());
 
     setStorageWithProperty("Instance", input);
-    window.location.reload(); // comment out during development
+    // window.location.reload(); // comment out during development
   }
 }
 
@@ -327,16 +360,17 @@ export async function setupOptionsListenerById(option, settings) {
   console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
   if (element) {
-    let result = await getStorage([option]);
+    let result = await getStorageProperty(option);
+    console.log("setupOptionsListenerById", {option, result});
 
-    if (option in result === false || result[option] === null || result[option] === undefined) {
+    if (result === null || result === undefined) {
       console.log("setting default for", option);
-      result[option] = get(settings, "default", { default: false });
-      console.log("result[option]", {option, result});
-      await setStorageWithProperty(option, result[option]);
+      result = get(settings, "default", { default: false });
+      console.log("result", {option, result});
+      await setStorageWithProperty(option, result);
     }
 
-    element.checked = result[option] ? true : false;
+    element.checked = result ? true : false;
 
     let defaultCallback = async () => {
       console.log("defaultCallback", {option, element});
@@ -353,6 +387,8 @@ export async function setupOptionsListenerById(option, settings) {
     let callbackFunction = defaultCallback;
     let callbackSetting = get(settings, "callback");
 
+    console.log("callbackSetting", {option, callbackSetting});
+
     if (callbackSetting) {
       callbackFunction = () => {
         console.log("callbackFunction", {option, element});
@@ -360,7 +396,7 @@ export async function setupOptionsListenerById(option, settings) {
       }
     }
 
-    element.addEventListener("click", callbackFunction);
+    element.addEventListener("click", callbackFunction, { passive: true });
     element.disabled = false;
 
     if (disabled) {
@@ -375,16 +411,16 @@ export async function setupOptionsListenerById(option, settings) {
   if (dropdownElement) {
     console.log("dropdownElement", {dropdown, dropdownElement});
     let dropdownDefault = get(settings, "dropdownDefault");
-    let result = await getStorage([dropdown]);
+    let result = await getStorageProperty(dropdown);
 
-    if (dropdown in result === false || result[dropdown] === null || result[dropdown] === undefined) {
+    if (result === null || result === undefined) {
       console.log("setting default for", dropdown);
-      result[dropdown] = dropdownDefault;
-      console.log("result[dropdown]", {dropdown, result});
-      await setStorageWithProperty(dropdown, result[dropdown]);
+      result = dropdownDefault;
+      console.log("result", {dropdown, result});
+      await setStorageWithProperty(dropdown, result);
     }
 
-    dropdownElement.value = result[dropdown];
+    dropdownElement.value = result;
 
     let dropdownDefaultCallback = async () => {
       console.log("defaultDropdownCallback", {dropdown, dropdownElement});
@@ -401,7 +437,7 @@ export async function setupOptionsListenerById(option, settings) {
       }
     }
 
-    dropdownElement.addEventListener("change", dropdownCallbackFunction);
+    dropdownElement.addEventListener("change", dropdownCallbackFunction, { passive: true });
 
     for (let option of dropdownElement.options) {
       option.disabled = !element.checked;
@@ -420,11 +456,22 @@ export async function onLoad() {
     "follows",
     "Instance",
     "PermissionDeniedInstance",
-  ]).then(result => {
+  ]).then(async result => {
     let instanceLabel = result.Instance;
 
     if (result.Instance) {
       document.getElementById("instanceTextBox").value = instanceLabel;
+      await setupOptionsListenerById("OpenInNewTab", { disabled: false });
+      await setupOptionsListenerById("AutoJumpOnLoadStatus", { disabled: false, dropdownDefault: "local" });
+      await setupOptionsListenerById("AutoJumpOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
+      await setupOptionsListenerById("AutoJumpOnCopyPastePrompt", { disabled: true });
+      await setupOptionsListenerById("ReadWriteAll", { disabled: false, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
+      // todo: if oauth is enabled, check that token exists. if not, set value back to false
+      await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonExtension });
+      await setupOptionsListenerById("UpdateStats", { disabled: true });
+      await setupOptionsListenerById("Following", { disabled: true });
+      await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
+      // <!-- Context Menu -->
     }
 
     if (result.PermissionDeniedInstance) {
@@ -451,21 +498,10 @@ export async function onLoad() {
   let submitButtonElement = document.getElementById("submitButton");
 
   if (submitButtonElement) {
-    submitButtonElement.addEventListener("click", onClicked);
+    submitButtonElement.addEventListener("click", onClicked, { passive: true });
   }
-
-  await setupOptionsListenerById("OpenInNewTab", { disabled: false });
-  await setupOptionsListenerById("AutoJumpOnLoadStatus", { disabled: false, dropdownDefault: "local" });
-  await setupOptionsListenerById("AutoJumpOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
-  await setupOptionsListenerById("AutoJumpOnCopyPastePrompt", { disabled: true });
-  await setupOptionsListenerById("ReadWriteAll", { disabled: true, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
-  await setupOptionsListenerById("OauthApp", { disabled: true, callback: ifTrueThenInitializeMastodonExtension });
-  await setupOptionsListenerById("UpdateStats", { disabled: true });
-  await setupOptionsListenerById("Following", { disabled: true });
-  await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
-  await setupOptionsListenerById("OnClickedReadWrite", { disabled: true });
 
   document.onkeypress = keyPress;
 }
 
-document.addEventListener("DOMContentLoaded", onLoad);
+document.addEventListener("DOMContentLoaded", onLoad, { passive: true });
