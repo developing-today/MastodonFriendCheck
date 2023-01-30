@@ -860,10 +860,6 @@ export async function follow(id) {
   return result;
 }
 
-export function getPageType(urlExploded) {
-  return urlExploded[2] ? "status" : "account";
-}
-
 export async function toggleMastodonTab(tab, settings) {
   cache.lastUrls = cache.lastUrls || [];
   cache.lastUrls.push({urls:[tab.url], timestamp: Date.now()});
@@ -950,33 +946,58 @@ export async function toggleMastodonTab(tab, settings) {
     });
 }
 
-export async function onInstalled(reason) {
-  console.log("onInstalled", reason);
+function isString(x) {
+  return Object.prototype.toString.call(x) === "[object String]"
+}
+
+export async function onInstalled(installInfo) {
+  if (isString(installInfo)) {
+    console.log("onInstalled", "installInfo was a string", {installInfo});
+    installInfo = { reason: installInfo };
+  }
+  console.log("onInstalled", { installInfo });
+
   if (![
     chrome.runtime.OnInstalledReason.BROWSER_UPDATE,
     chrome.runtime.OnInstalledReason.CHROME_UPDATE,
-    chrome.runtime.OnInstalledReason.UPDATE,
     "chrome_update",
-    "browser_update",
-    "update"
-  ].includes(reason)) {
-    console.log("onInstalled", "syncCacheWithStorage", { reason });
+    "browser_update"
+  ].includes(installInfo.reason)) {
+    console.log("onInstalled", "syncCacheWithStorage", { installInfo });
     await syncCacheWithStorage();
+
+    let storageVersion = await getStorageVersion();
+
+    if (!storageVersion) {
+      console.log("onInstalled", "setStorageVersion", { installInfo });
+      storageVersion = versionWhichSignifiesFirstRunIsNeeded();
+    }
+    let storageMajorVersion = storageVersion.split(".")[0];
+    let currentMajorVersion = getCurrentVersion().split(".")[0];
+    console.log("onInstalled", "storageVersion", { storageVersion, installInfo, currentMajorVersion, storageMajorVersion });
+
     if (
-      getCurrentVersion() !==
-      await getStorageVersion() ||
-      reason == "onClicked,noInstance"
+      !storageVersion ||
+      parseInt(currentMajorVersion, 10) > parseInt(storageMajorVersion, 10) ||
+      installInfo.reason == "onClicked,noInstance"
     ) {
+      console.log("onInstalled", "openOptions", { installInfo, reason: installInfo.reason });
+
       if (chrome.runtime.openOptionsPage) {
         console.log("onInstalled", "openOptionsPage");
         chrome.runtime.openOptionsPage();
+
       } else {
         console.log("onInstalled", "newTab");
         newTab(getChromeUrl("options.html"))
       }
+
     } else {
-      console.log("onInstalled", "no version change");
+      console.log("onInstalled", "no major version change");
     }
+
+  } else {
+    console.log("onInstalled", "no action", { installInfo, reason: installInfo.reason });
   }
 }
 
@@ -1053,12 +1074,12 @@ export async function onClicked(tab) {
 
   if (version === versionWhichSignifiesFirstRunIsNeeded()){
     console.log("onClicked", "versionWhichSignifiesFirstRunIsNeeded");
-    return onInstalled("onClicked");
+    return onInstalled({ reason: "onClicked" });
   }
 
   if (!instance) {
     console.log("onClicked", "no instance");
-    return onInstalled("onClicked,noInstance");
+    return onInstalled({ reason: "onClicked,noInstance" });
   }
 
   if (await getStorageProperty("OnClickedToggle")) {
@@ -1150,7 +1171,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
     }
     let instance = await getInstance();
     let locality = null;
-    let pageType = null;
+    let pageDetails = null;
 
     console.log("onUpdated", "instance", instance);
 
@@ -1175,25 +1196,26 @@ export async function onUpdated(tabId, changeInfo, tab) {
                     (accountDropdown == "first-opened" || locality.startsWith(accountDropdown));
 
           let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
-          pageType = getPageType(urlExplode);
+          pageDetails = await getPageDetails(tab.url);
 
-          console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
+          console.log("onUpdated", { locality, statusDropdown, accountDropdown, pageDetails, statusDropdownMatches, accountDropdownMatches });
 
           if (
-            pageType &&
+            pageDetails &&
+            get(pageDetails, "pageType") &&
             (
               (
-                pageType == "status" && statusDropdownMatches
+                pageDetails.pageType == "status" && statusDropdownMatches
               ) ||
               (
-                pageType == "account" && accountDropdownMatches
+                pageDetails.pageType == "account" && accountDropdownMatches
               )
             )
           ) {
-            console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
+            console.log("onUpdated", "pageType matches", { pageDetails, statusDropdownMatches, accountDropdownMatches, locality });
 
           } else {
-            console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
+            console.log("onUpdated", "pageType does not match", { pageDetails, statusDropdownMatches, accountDropdownMatches, locality });
             return;
           }
         }
@@ -1229,25 +1251,26 @@ export async function onUpdated(tabId, changeInfo, tab) {
               );
 
         let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url));
-        pageType = getPageType(urlExplode);
+        pageDetails = await getPageDetails(tab.url);
 
-        console.log("onUpdated", "conditions", { locality, statusDropdown, accountDropdown, pageType, statusDropdownMatches, accountDropdownMatches });
+        console.log("onUpdated", "conditions", { locality, statusDropdown, accountDropdown, pageDetails, statusDropdownMatches, accountDropdownMatches });
 
         if (
-          pageType &&
+          pageDetails &&
+          get(pageDetails, "pageType") &&
           (
             (
-              pageType == "status" && statusDropdownMatches
+              pageDetails.pageType == "status" && statusDropdownMatches
             ) ||
             (
-              pageType == "account" && accountDropdownMatches
+              pageDetails.pageType == "account" && accountDropdownMatches
             )
           )
         ) {
-          console.log("onUpdated", "pageType matches", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
+          console.log("onUpdated", "pageType matches", { pageDetails, statusDropdownMatches, accountDropdownMatches, locality });
 
         } else {
-          console.log("onUpdated", "pageType does not match", { pageType, statusDropdownMatches, accountDropdownMatches, locality });
+          console.log("onUpdated", "pageType does not match", { pageDetails, statusDropdownMatches, accountDropdownMatches, locality });
           return;
         }
       }
@@ -1302,7 +1325,10 @@ export async function onUpdated(tabId, changeInfo, tab) {
       settings.tab = tab;
       settings.timestamp = timestamp;
       settings.locality = locality;
-      settings.pageType = pageType;
+      settings.pageDetails = pageDetails;
+      if (pageDetails && pageDetails.pageType) {
+        settings.pageType = pageDetails.pageType;
+      }
       console.log("onUpdated", "settings", settings);
 
       return toggleMastodonTab(tab, settings);
@@ -1312,6 +1338,7 @@ export async function onUpdated(tabId, changeInfo, tab) {
 
 async function syncContextMenus() {
   await chrome.contextMenus.removeAll();
+  // todo use extension checkbox to determine if context menu should be created
   await chrome.contextMenus.create({
     "id": "context",
     "title": "Toggle Mastodon Page 🐘 🐘 🐘 Jump Now",
@@ -1321,6 +1348,29 @@ async function syncContextMenus() {
       "*://*/web/statuses/*"
     ]
   });
+
+  // todo toggle redirect menu for autojump status, account, copypaste
+}
+
+async function getPageDetails(url) {
+  let pageDetails = { url };
+
+  let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(url));
+
+  if (urlExplode) {
+    if (urlExplode.length > 2) {
+      pageDetails.pageType = "status";
+      pageDetails.account = urlExplode[1];
+    } else if (urlExplode.length == 2) {
+      pageDetails.pageType = "account";
+      pageDetails.account = urlExplode[1];
+      pageDetails.status = urlExplode[2];
+    }
+  } else {
+    console.log("getPageDetails", "urlExplode was falsey", urlExplode);
+  }
+
+  return pageDetails;
 }
 
 async function checkFollows(url, settings) {
@@ -1362,11 +1412,12 @@ async function checkFollows(url, settings) {
         }
 
         let account = username + "@" + instance;
+
         console.log("checkFollows", "handleSplit", {username, instance, result, cache});
 
         if (account in result.follows.content) {
           console.log("checkFollows", "account in follows", account);
-          return result.InstanceHttps + "@" + account;
+          return { url: result.InstanceHttps + "@" + account, following: true };
 
         } else {
           console.log("checkFollows", "account not in follows", account, result.follows);
@@ -1376,7 +1427,7 @@ async function checkFollows(url, settings) {
 
           if (webAccount in result.follows.content) {
             console.log("checkFollows", "webAccount in follows", webAccount);
-            return result.InstanceHttps + "@" + webAccount;
+            return { url: result.InstanceHttps + "@" + webAccount, following: true };
 
           } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
             console.log("checkFollows", "follows is too old", result.follows.timestamp);
@@ -1385,7 +1436,7 @@ async function checkFollows(url, settings) {
 
             if (account in result.follows.content) {
               console.log("checkFollows", "account in follows now", account);
-              return result.InstanceHttps + "@" + account;
+              return { url: result.InstanceHttps + "@" + account, following: true };
 
             } else {
               console.log("checkFollows", "account not in follows now", account);
@@ -1403,7 +1454,7 @@ async function checkFollows(url, settings) {
 
     await syncLocalWithFollowsCsv();
 
-    checkFollows(url, { noSync: true });
+    return checkFollows(url, { noSync: true });
   }
 }
 
@@ -1463,6 +1514,9 @@ export async function onMessage(message, sender, sendResponse) {
 
   console.log("onMessage", message, sender, sendResponse, response);
 
+  let senderUrl = new URL(sender.tab.url);
+  let instance = new URL(await getInstance());
+
   if (message.type == "getStorage") {
     Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
     sendMessage(sender.tab.id, response);
@@ -1470,9 +1524,9 @@ export async function onMessage(message, sender, sendResponse) {
   } else if (message.type == "setStorage") {
     await setStorage(message);
 
-  } else if (message.type == "follow") {
+  } else if (message.type == "follow" && senderUrl && senderUrl.hostname !== instance.hostname) {
 
-    let searchResult = await search(sender.tab.url);
+    let searchResult = await search(senderUrl.href);
     let accounts = get(searchResult, "accounts") || [];
 
     if (accounts.length > 0) {
@@ -1493,18 +1547,23 @@ export async function onMessage(message, sender, sendResponse) {
       console.log("onMessage", "follow", "no accounts", searchResult);
     }
 
-  } else if (message.type == "onLoad") {
+  } else if (message.type == "onLoad" && senderUrl && senderUrl.hostname !== instance.hostname) {
     console.log("onMessage", "onLoad", message, sender, sendResponse, response);
 
-    let url = await checkFollows(sender.tab.url);
+    let followResult = await checkFollows(senderUrl.href);
+    if (!followResult) {
+      console.log("onMessage", "onLoad", "no followResult", { followResult, senderUrl });
+      return;
+    }
+    let followUrl = new URL(followResult.url);
 
-    if (url) {
-      console.log("onMessage", "onLoad", "following", url);
-      sendMessage(sender.tab.id, response, { type: "following", content: { url } });
+    if (followResult.following) {
+      console.log("onMessage", "onLoad", "following", { followResult, followUrl, senderUrl });
+      sendMessage(sender.tab.id, response, { type: "following", content: { url: followUrl.href } });
 
     } else {
-      console.log("onMessage", "onLoad", "not following", url);
-      sendMessage(sender.tab.id, response, { type: "notFollowing", content: { url } });
+      console.log("onMessage", "onLoad", "not following", "addFollowListener", { followResult, url, followUrl, senderUrl });
+      sendMessage(sender.tab.id, response, { type: "addFollowListener", content: { url: followUrl.href } });
     }
 
     onUpdated(sender.tab.id, { status: "onMessage", onMessage: true, response }, sender.tab);
@@ -1576,4 +1635,12 @@ console.log("background.js", "done");
 //      not same url clicked.
 // TODO: be able to edit profile while extension is enabled
     //   don't add listener if not following and is instance
-  
+
+// todo: last url check not working for autoredirect well enough
+          // issues with clicking on alt text for image
+          // when local and autoredirect remote is on
+          // separate 'manualy onclicked' list that disables
+          // autoredirect for those urls, maybe last 10 or so
+
+
+// todo: context menu for toggle autoredirect

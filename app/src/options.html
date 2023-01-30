@@ -30,7 +30,7 @@
         margin-left: 2rem;
       }
       .inner-note {
-        margin-left: 0rem;
+        margin-left: 1.5rem;
       }
       #instanceLabel {
         font-size: 120%;
@@ -47,48 +47,37 @@
     <div class="optionsBox">
       <div>
         Options:<br>
-        <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false>Open In New Tab</input><br>
-        <input type="checkbox" class="options disabled" id="Following" name="Following" value=false>Follow>Following</input><br>
+        <input type="checkbox" class="options disabled" id="Following" name="Following" value=false disabled=true>Follow>Following</input><br>
 
         <input type="checkbox" class="options disabled" id="AutoJumpOnLoadAccount" name="AutoJumpOnLoadAccount" value=false disabled=true>Auto-Jump [account]</input><br>
-        <label class="note" for="AutoJumpOnLoadAccountDropdown">When:</label>
         <select class="inner-note" id="AutoJumpOnLoadAccountDropdown" name="AutoJumpOnLoadAccountDropdown" value=false disabled=true>
-          <option value="remote"disabled=true>Remote</option>
-          <option value="local" disabled=true>Local</option>
+          <option value="remote"disabled=true>Remote Account</option>
+          <option value="local" disabled=true>Local Account</option>
           <option value="first-opened" disabled=true>First Opened</option>
         </select><br>
 
         <input type="checkbox" class="options disabled" id="AutoJumpOnLoadStatus" name="AutoJumpOnLoadStatus" value=false disabled=true>Auto-Jump [status]</input><br>
-        <label class="note" for="AutoJumpOnLoadStatusDropdown">When:</label>
         <select class="inner-note" id="AutoJumpOnLoadStatusDropdown" name="AutoJumpOnLoadStatusDropdown" value=false disabled=true>
-          <option value="local" disabled=true>Local</option>
-          <option value="remote" disabled=true>Remote</option>
+          <option value="local" disabled=true>Local Status</option>
+          <option value="remote" disabled=true>Remote Status</option>
           <option value="first-opened" disabled=true>First Opened</option>
         </select><br>
+        <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false disabled=true>Open In New Tab</input><br>
       </div>
       <div>
-        Extra Settings: <br>
-        <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false>Grant Write [all-url] (popup)</input><br>
-        <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false>Grant OAuth (new tab)</input><br>
-        <!--
-          todo:
-            consider oauth window.open in current tab,
-            then return to settings either way
-            this would rely on update oauth listener setup to
-              check if code is set for [url] and
-                if yes, update true
-                if not, update false
-        -->
+        Extra Permissions: <br>
+        <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false disabled=true>Grant OAuth (new tab)</input><br>
+        <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false disabled=true>Grant Write [all-url] (popup)</input><br>
       </div>
       <div>
         Additional Features: [beta]<br>
-        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false>Auto-Jump [copy-prompt]</input><br>
-        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false>Update Stats {read-write}</input><br>
-        <input type="checkbox" class="options disabled" id="FollowListener" name="FollowListener" value=false>Remote Follow {oauth}</input><br>
-        <input type="checkbox" class="options disabled" id="OnClickedToggle"  name="OnClickedToggle" value=false>Jump Extension Button</input><br>
-        <input type="checkbox" class="options disabled" id="ContextMenu" name="ContextMenu" value=false>Jump Context Menu</input><br>
-        <input type="checkbox" class="options disabled" id="HotKey" name="HotKey" value=false>Jump HotKey</input><br>
-        <button class="options disabled" id="hotkeyButton">Assign HotKey</button>
+        <input type="checkbox" class="options disabled" id="FollowListener" name="FollowListener" value=false disabled=true>Remote Follow {oauth}</input><br>
+        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false disabled=true>Update Stats {read-write}</input><br>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false disabled=true>Auto-Jump [copy-prompt]</input><br>
+        <input type="checkbox" class="options disabled" id="OnClickedToggle"  name="OnClickedToggle" value=false disabled=true>Jump Extension Button</input><br>
+        <input type="checkbox" class="options disabled" id="ContextMenu" name="ContextMenu" value=false disabled=true>Jump Context Menu</input><br>
+        <input type="checkbox" class="options disabled" id="Shortcut" name="Shortcut" value=false disabled=true>Jump Shortcut</input><br>
+        <button class="options disabled" id="shortcutsButton">Assign Shortcuts</button>
       </div>
     </div>
   </body>

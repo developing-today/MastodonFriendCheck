@@ -147,6 +147,8 @@ export async function authorizeUser() {
   url.searchParams.append("scope", await getAppPermissions());
   console.log("authorizeUser", url);
   newTab(url);
+  window.location.reload(); // comment out during development
+  // todo consider dynamic reload of options page values instead of full page reload
 }
 
 export async function makeApp() {
@@ -255,16 +257,17 @@ export async function permissionDeniedInstance() {
   document.getElementById("instanceLabel").innerHTML = permissionRequiredInnerHTML();
 }
 
-export async function permissionGrantedInstance(input) {
-  console.log("permissionGrantedInstance", input);
+export async function initializeStorage(input) {
+  console.log("initializeStorage", input);
   let result = await setStorage({
     Instance: input,
     InstanceHttps: makeHttps(input),
     InstanceClean: cleanDomain(input),
     PermissionDeniedInstance: false,
+    OauthApp: false,
     Version: getCurrentVersion(),
   }).then(async (result) => {
-    console.log("permissionGrantedInstance", {result});
+    console.log("initializeStorage", {result});
     await onResult();
   });
   console.log(result);
@@ -289,8 +292,8 @@ export async function initializeChromeReadWriteAllOrigin() {
   ).then(() => setCurrentVersion());
 }
 
-export async function initializeMastodonExtension() {
-  console.log("initializeMastodonExtension");
+export async function initializeMastodonOauthApp() {
+  console.log("initializeMastodonOauthApp");
   return makeApp()
   .then(() => authorizeUser()
   ).then(() => setOauthOption(true)
@@ -305,27 +308,52 @@ export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, eleme
   if (checked) {
     console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "checked");
     await initializeChromeReadWriteAllOrigin(
-    ).then(() => setOauthOption(true)
-    ).catch(() => setOauthOption(false));
+    ).then(async () => setOauthOption(true)
+    ).catch(async () => setOauthOption(false));
   } else {
     console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
     await setOauthOption(false);
   }
   // window.location.reload(); // comment out during development
+  // todo consider dynamic reload of options page values instead of full page reload
 }
 
-export async function ifTrueThenInitializeMastodonExtension(option, element, settings) {
-  console.log("ifTrueThenInitializeMastodonExtension", {option, element, settings});
+export async function ifTrueThenInitializeMastodonOauthApp(option, element, settings) {
+  console.log("ifTrueThenInitializeMastodonOauthApp", {option, element, settings});
+  let followingElement = document.getElementById("FollowListener");
+
   if (get(element, "checked")) {
-    console.log("ifTrueThenInitializeMastodonExtension", "checked");
-    await initializeMastodonExtension(
-    ).then(() => setOauthOption(true)
+    console.log("ifTrueThenInitializeMastodonOauthApp", "checked");
+    await initializeMastodonOauthApp(
+    ).then(async () => {
+      console.log("ifTrueThenInitializeMastodonOauthApp", "initializeMastodonOauthApp");
+      if (followingElement) {
+        await setStorageWithProperty("FollowListener", true);
+        followingElement.disabled = false;
+        followingElement.checked = true;
+        followingElement.classList.add("enabled");
+        followingElement.classList.remove("disabled");
+      } else {
+        console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
+      }
+    }).then(() => setOauthOption(true)
     ).catch(() => setOauthOption(false));
   } else {
-    console.log("ifTrueThenInitializeMastodonExtension", "unchecked");
+    console.log("ifTrueThenInitializeMastodonOauthApp", "unchecked");
     await setOauthOption(false);
+    if (followingElement) {
+      await setStorageWithProperty("FollowListener", false);
+      followingElement.classList.add("disabled");
+      followingElement.classList.remove("enabled");
+      followingElement.checked = false;
+      followingElement.disabled = true;
+    } else {
+      console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
+    }
   }
   // window.location.reload(); // comment out during development
+  // todo consider dynamic reload of options page values instead of full page reload
+
 }
 // # todo setup oauth to contain url in settings and reuse indefinitely whnever getinstance matches
 // # todo setup urls for toggle to include more information, where it was called, tally of times called, tally of times toggle
@@ -333,21 +361,35 @@ export async function onClicked() {
   let input = document.getElementById("instanceTextBox").value.trim();
 
   if (input && input != "Thanks!") {
-    await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
-    ).then(() => permissionGrantedInstance(input)
-    ).catch(() => permissionDeniedInstance()
-    ).then(() => setOauthOption(false)
+    let instance = await getInstance();
+    console.log("onClicked", { input, instance });
 
-    ).then(() => setCurrentVersion());
-
-    setStorageWithProperty("Instance", input);
-    // window.location.reload(); // comment out during development
+    if (!instance || instance != input) {
+      await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
+      ).catch(async () => {
+        await permissionDeniedInstance();
+        Promise.reject("permissionDeniedInstance");
+      }).then(() => initializeStorage(input));
+      // window.location.reload(); // comment out during development
+      // todo consider dynamic reload of options page values instead of full page reload
+    }
   }
 }
 
 export async function setupOptionsListenerById(option, settings) {
   console.log("setupOptionsListenerById", {option, settings});
+  // todo: setupOptionsListenerById 'dependencyCallback'
+  // exampe callback
+  // if oauth is enabled,
+  //    check that 'access_token' exists.
+  //    verify_credentials access_token
+  //    if code, retry generate from code
+  // if not, set value back to false
+  //
 
+  // todo: update apps to be only source for oauth
+  // apps[instanceUrl.hostname] = { access_token, client_id, client_secret, code, created_at, id, redirect_uri, scopes, token_type, updated_at, url }
+  // something like that
   let disabled = false;
 
   if (get(settings, "disabled")) {
@@ -451,11 +493,16 @@ export async function setupOptionsListenerById(option, settings) {
   return element;
 }
 
+export async function onClickedShortcut() {
+  await newTab('chrome://extensions/shortcuts');
+}
+
 export async function onLoad() {
   await getStorage([
     "follows",
     "Instance",
     "PermissionDeniedInstance",
+    "OauthApp"
   ]).then(async result => {
     let instanceLabel = result.Instance;
 
@@ -466,12 +513,27 @@ export async function onLoad() {
       await setupOptionsListenerById("AutoJumpOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
       await setupOptionsListenerById("AutoJumpOnCopyPastePrompt", { disabled: true });
       await setupOptionsListenerById("ReadWriteAll", { disabled: false, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
-      // todo: if oauth is enabled, check that token exists. if not, set value back to false
-      await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonExtension });
+      await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonOauthApp });
       await setupOptionsListenerById("UpdateStats", { disabled: true });
-      await setupOptionsListenerById("Following", { disabled: true });
+      await setupOptionsListenerById("Following", { disabled: false, default: true  });
       await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
-      // <!-- Context Menu -->
+      await setupOptionsListenerById("ContextMenu", { disabled: false, default: true });
+      await setupOptionsListenerById("Shortcut", { disabled: false, default: true });
+
+      let shortcutsButtonElement = document.getElementById("shortcutsButton");
+
+      if (shortcutsButtonElement) {
+        shortcutsButtonElement.addEventListener("click", onClickedShortcut, { passive: true });
+        shortcutsButtonElement.disabled = false;
+        shortcutsButtonElement.classList.add("enabled");
+        shortcutsButtonElement.classList.remove("disabled");
+      }
+    }
+
+    if (result.OauthApp) {
+      await setupOptionsListenerById("FollowListener", { disabled: false, default: true });
+    } else {
+      await setupOptionsListenerById("FollowListener", { disabled: true });
     }
 
     if (result.PermissionDeniedInstance) {

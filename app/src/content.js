@@ -213,8 +213,8 @@ async function handleOnLoadResult(result) {
       await findFollowButton(url, fixFollowButton, result);
 
 
-    } else if (type === "notFollowing") {
-      console.log("content.js", "handleOnLoadResult", "not following", url);
+    } else if (type === "addFollowListener") {
+      console.log("content.js", "handleOnLoadResult", "not following", "addFollowListener", url);
 
       await findFollowButton(url, addFollowListener, result);
 
@@ -225,7 +225,7 @@ async function handleOnLoadResult(result) {
   } else if (type) {
     console.log("content.js", "handleOnLoadResult", "no url", { type, url, result });
 
-    if (type === "notFollowing") {
+    if (type === "addFollowListener") {
       console.log("content.js", "handleOnLoadResult", "not following", url);
 
       await findFollowButton(window.location.href, addFollowListener, result);
