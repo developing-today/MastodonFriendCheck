@@ -28,6 +28,7 @@
       "matches": [
         "*://*/@*",
         "*://*/users/*",
+        "*://*/channel/*",
         "*://*/notices/*",
         "*://*/notes/*",
         "*://*/i/web/post/*",

@@ -304,7 +304,7 @@ export function makeMastodonUrl(
 ) {
   // TODO: clean local url, determine difference between built and url-host
   // "@paeneultima@thedreaming.city"
-  // {instance: 'thedreaming.city', id: '109660728945403082', type: 'built'}
+  // {instance: 'thedreaming.city', id: '109660`28945403082', type: 'built'}
   // {instance: 'thedreaming.city', id: '109660728919305576', type: 'url-host'}
   // {instance: 'https://hachyderm.io/', id: '109660728945403082', type: 'local'
   // determine why this one cant be found what do then https://thedreaming.city/@paeneultima/109733736814167269
@@ -381,6 +381,7 @@ export function changeMastodonUriToUrl(url) {
   // # TODO classifyMastodonUrl
   //         // "*://*/@*",
   //         // "*://*/users/*",
+  ///channel
   //         // "*://*/notices/*",
   //         // "*://*/notes/*",
   //         // "*://*/i/web/post/*",
@@ -506,22 +507,28 @@ export async function getWebfinger(instance, username) {
 }
 
 export function getProfileFromWebfinger(webfinger) {
-  console.log("getWebfingerProfile", { webfinger });
+  console.log("getProfileFromWebfinger", { webfinger });
 
   let profileUrls = get(webfinger, "links");
-  console.log("getWebfingerProfile", { webfinger, profileUrls });
+  console.log("getProfileFromWebfinger", { webfinger, profileUrls });
 
   if (!profileUrls) {
     return null;
   }
 
-  profileUrls = profileUrls.filter(link =>
-      link.rel  == "http://webfinger.net/rel/profile-page" &&
-      link.type == "text/html"
-    ).map(link => link.href);
-  console.log("getWebfingerProfile", { webfinger, profileUrls });
+  profileUrls = profileUrls.filter(url =>
+      url.rel  == "http://webfinger.net/rel/profile-page");
+
+  if (profileUrls.length > 1) {
+    profileUrls = profileUrls.filter(url =>
+        url.type == "text/html");
+  }
+
+  profileUrls = profileUrls.map(url => url.href);
+
+  console.log("getProfileFromWebfinger", { webfinger, profileUrls });
   let profileUrl = profileUrls.length > 0 ? profileUrls[0] : null;
-  console.log("getWebfingerProfile", { webfinger, profileUrls, profileUrl });
+  console.log("getProfileFromWebfinger", { webfinger, profileUrls, profileUrl });
 
   return profileUrl;
 }
@@ -708,7 +715,7 @@ export async function toggleMastodonUrl(url, settings) {
       console.log("toggleMastodonUrl", { webfinger, domain, username, settings });
 
       let profileUrl = getProfileFromWebfinger(webfinger);
-      let profileUsername = profileUrl.split("/").slice(-1)[0].split("@")[0];
+      let profileUsername = !profileUrl ? null : profileUrl.split("/").slice(-1)[0].split("@")[0];
       let profileDomain = new URL(profileUrl).host;
       console.log("toggleMastodonUrl", "profile", { profileUrl, profileUsername, profileDomain });
 
@@ -1644,3 +1651,7 @@ console.log("background.js", "done");
 
 
 // todo: context menu for toggle autoredirect
+// TODO allow jump back from this??????
+//   <!-- https://hub.libranet.de/channel/la_teje8685?mid=b64.aHR0cHM6Ly9odWIubGlicmFuZXQuZGUvaXRlbS9kNTM4NzZlOS01Y2I0LTRjMjQtOTY5OS1kOTE5NjRjZmU2NTk -->
+
+// TODO current method of window.open seems to erase 'back' history. Is there a way to fix this??????
