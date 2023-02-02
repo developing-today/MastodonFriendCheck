@@ -11,3 +11,11 @@ Features:
   - optional auto-Jump
     - by status or account
     - when local or remote
+
+ideas shortcuts
+alt+m open home instance
+alt+a accounts autotoggle
+alt+s statuses autotoggle
+alt+t toggle page (bg echo content, on response toggle)
+alt+o options menu
+alt+n new status
