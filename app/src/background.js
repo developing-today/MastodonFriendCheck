@@ -35,10 +35,11 @@ export async function getCurrentTab() {
   };
   let [tab] = await chrome.tabs.query(queryOptions);
   console.log("currentTab", tab);
+  // todo:
   // if (!tab) {
-  // request window location through content script
-  // import getcallbacktimestamp from checkFollows
-  // send echorequest, content script for echo response
+  //   request window location through content script
+  //   import getcallbacktimestamp from checkFollows
+  //   send echorequest, content script for echo response
   // }
   return tab;
 }
@@ -78,7 +79,7 @@ export function syncCacheWithStorage(keys) {
 
   cache["lastSyncFull"] = new Date();
   // cache.counter++;
-  // console.log("syncCacheWithStorage", cache);
+  console.log("syncCacheWithStorage", cache);
 
   return cache;
 }
@@ -114,7 +115,7 @@ export async function getStorageProperty(name) {
     name = name[0];
   }
   let result = await getStorage(name);
-  // console.log("getStorageProperty", {name, result});
+  console.log("getStorageProperty", {name, result});
   return result[name];
 }
 
@@ -335,15 +336,15 @@ export function makeMastodonUrl(
       console.log("makeMastodonUrl", "settings.accounts", { result, settings, url });
 
       if (Array.isArray(settings.accounts)) {
-        // console.log("makeMastodonUrl", "settings.accounts.isArray", { result, settings, url });
+        console.log("makeMastodonUrl", "settings.accounts.isArray", { result, settings, url });
         settings.accounts.forEach(account => {
-          // console.log("makeMastodonUrl", "settings.accounts.forEach", { result, settings, url });
+          console.log("makeMastodonUrl", "settings.accounts.forEach", { result, settings, url });
           result.accounts.push(account);
-          // console.log("makeMastodonUrl", "settings.accounts.forEach result", { result, settings, url });
+          console.log("makeMastodonUrl", "settings.accounts.forEach result", { result, settings, url });
         });
 
       } else {
-        // console.log("makeMastodonUrl", "settings.accounts.push", { result, settings, url });
+        console.log("makeMastodonUrl", "settings.accounts.push", { result, settings, url });
         result.accounts.push(settings.accounts);
         console.log("makeMastodonUrl", "settings.accounts.push result", { result, settings, url });
       }
@@ -555,9 +556,13 @@ export async function getWebfingerAccount(instance, username) {
   console.log("getWebfingerAccount", { webfinger });
 
   let account = getAccountFromWebfinger(webfinger).split("@");
+  console.log("getWebfingerAccount", { webfinger, account });
 
   if (account.length == 1) {
+    console.log("getWebfingerAccount", "account.length = 1", { webfinger, account, instance });
     account = [account[0], instance];
+  } else {
+    console.log("getWebfingerAccount", "account.length != 1", { webfinger, account, instance });
   }
 
   return account.join("@");
@@ -585,8 +590,8 @@ export async function toggleMastodonUrl(url, settings) {
   //     - shouldn't occur, but if it does, follow 2. hopefully impossible.
   //   4 remote to remote mastodon.social to infosec.exchange
   //     - "show original" on remote, follow 2 if possible
-  console.log("toggleMastodonUrl", url);
-  let urlExploded = explodeUrlNoHandler(changeMastodonUriToUrl(url.toString()));
+  // console.log("toggleMastodonUrl", url);
+  let urlExploded = explodeUrlNoHandler(changeMastodonUriToUrl((url || "").toString()));
   let [hostDomain, handle, id] = urlExploded;
   let subpath = urlExploded.slice(3).join("/");
   if (!settings) {
@@ -607,51 +612,49 @@ export async function toggleMastodonUrl(url, settings) {
     let hostDomainUrl = makeHttps(hostDomain);
     console.log("toggleMastodonUrl", "domain comparison", { username, remoteDomain, instance, hostDomainUrl });
 
-    // if (get(settings, "locality") == "remote-remote") {
-    //   console.log("toggleMastodonUrl", "remote-remote");
-    //   let profileUrl = await getWebfingerProfile(remoteDomain, username);
-    //   let [ profileUsername, profileDomain ] = profileUrl.split("/").slice(-1)[0].split("@");
-    //   let accountsArray = [
-    //     { instance: remoteDomain, username, type: "remote" },
-    //     { instance: hostDomain, handle, type: "remote-remote" },
-    //     { instance: profileDomain, username: profileUsername, type: "webfinger-profile" }
-    //   ];
+    if (get(settings, "locality") == "remote-remote") {
+      console.log("toggleMastodonUrl", "remote-remote");
+      let profileUrl = await getWebfingerProfile(remoteDomain, username);
+      let [ profileUsername, profileDomain ] = profileUrl.split("/").slice(-1)[0].split("@");
+      let accountsArray = [
+        { instance: remoteDomain, username, type: "remote" },
+        { instance: hostDomain, handle, type: "remote-remote" },
+        { instance: profileDomain, username: profileUsername, type: "webfinger-profile" }
+      ];
 
-    //   if (settings.accounts && !Array.isArray(settings.accounts)) {
-    //     settings.accounts = [settings.accounts];
+      if (!settings.accounts) {
+        settings.accounts = [];
+      } else if (!Array.isArray(settings.accounts)) {
+        settings.accounts = [settings.accounts];
+      }
 
-    //   } else if (!settings.accounts) {
-    //     settings.accounts = [];
-    //   }
+      settings.accounts = settings.accounts.concat(accountsArray);
 
-    //   settings.accounts = settings.accounts.concat(accountsArray);
+      if (id) {
+        let searchResults = await search(url);
 
-    //   if (id) {
-    //     let searchResults = await search(url);
+        if (searchResults && searchResults.statuses && searchResults.statuses.length > 0) {
+          console.log("toggleMastodonUrl", "remote-remote", "status", { url, searchResults });
+          let searchResultId = searchResults.statuses[0].id;
 
-    //     if (searchResults && searchResults.statuses && searchResults.statuses.length > 0) {
-    //       console.log("toggleMastodonUrl", "remote-remote", "status", { url, searchResults });
-    //       let searchResultId = searchResults.statuses[0].id;
+          let statusResult = await statuses(searchResultId);
+          console.log("toggleMastodonUrl", "remote-remote", "status", { url, statusResult, searchResults });
 
-    //       let statusResult = await statuses(searchResultId);
-    //       console.log("toggleMastodonUrl", "remote-remote", "status", { url, statusResult, searchResults });
+          let statusUrl = await get(statusResult, "url");
+          console.log("toggleMastodonUrl", "remote-remote", "status", { url, statusUrl, statusResult, searchResults });
 
-    //       let statusUrl = await get(statusResult, "url");
-    //       console.log("toggleMastodonUrl", "remote-remote", "status", { url, statusUrl, statusResult, searchResults });
+          if (statusUrl) {
+            console.log("toggleMastodonUrl", "remote-remote", "status", "redirect", { url, statusUrl, statusResult, searchResults });
 
-    //       if (statusUrl) {
-    //         console.log("toggleMastodonUrl", "remote-remote", "status", "redirect", { url, statusUrl, statusResult, searchResults });
-
-    //         return statusUrl;
-
-    //       } else {
-    //         console.log("toggleMastodonUrl", "remote-remote", "status", "no statusUrl", { url, statusUrl, statusResult, searchResults });
-    //       }
-    //     } else {
-    //       console.log("toggleMastodonUrl", "remote-remote", "no status", { url });
-    //     }
-    //   }
-    // }
+            return mastodonUrlResult(statusUrl, settings);
+          } else {
+            console.log("toggleMastodonUrl", "remote-remote", "status", "no statusUrl", { url, statusUrl, statusResult, searchResults });
+          }
+        } else {
+          console.log("toggleMastodonUrl", "remote-remote", "no status", { url });
+        }
+      }
+    }
 
     if (hostDomainUrl == instance) {
 
@@ -880,7 +883,17 @@ export async function toggleMastodonTab(tab, settings) {
 
       if (get(settings, "locality") == "remote-remote") {
         console.log("toggleMastodonTab", "double remote", { result, tab, settings });
-        result = await toggleMastodonUrl(result.url, settings);
+
+        let resultUrl = new URL(get(result, "url"));
+        let instance = new URL(await getInstance());
+
+        if (resultUrl.host != instance.host) {
+          console.log("toggleMastodonTab", "double remote", "remote");
+          delete settings.locality;
+          result = await toggleMastodonUrl(result.url, settings);
+        } else {
+          console.log("toggleMastodonTab", "double remote", "local");
+        }
         console.log("toggleMastodonTab", "double remote result", { result, tab, settings });
       }
 
@@ -935,20 +948,7 @@ export async function toggleMastodonTab(tab, settings) {
 
       } else {
         console.log("toggleMastodonTab: no jump", { url, settings });
-        console.log("toggleMastodonTab", "jump conditions", {
-          url,
-          tabUrl: tab.url,
-          pendingUrl: tab.pendingUrl,
-          lastUrl: cache.lastUrl,
-          lastUrls: cache.lastUrls,
-          status: status,
-          statusStartsWith: status && status.startsWith("onClicked"),
-          lastUrlsLength: cache.lastUrls.length,
-          lastUrlsLast: cache.lastUrls.slice(-2,-1)[0],
-          lastUrlsLastUrls: cache.lastUrls.slice(-2,-1)[0].urls,
-          lastUrlsLastUrlsFilter: cache.lastUrls.slice(-2,-1)[0].urls.filter(u => u.url == url),
-          lastUrlsLastUrlsFilterLength: cache.lastUrls.slice(-2,-1)[0].urls.filter(u => u.url == url).length,
-        });
+        console.log("toggleMastodonTab", "jump conditions", { url, tabUrl: tab.url, pendingUrl: tab.pendingUrl, lastUrl: cache.lastUrl, lastUrls: cache.lastUrls, status: status, statusStartsWith: status && status.startsWith("onClicked"), lastUrlsLength: cache.lastUrls.length, lastUrlsLast: cache.lastUrls.slice(-2,-1)[0], lastUrlsLastUrls: cache.lastUrls.slice(-2,-1)[0].urls, lastUrlsLastUrlsFilter: cache.lastUrls.slice(-2,-1)[0].urls.filter(u => u.url == url), lastUrlsLastUrlsFilterLength: cache.lastUrls.slice(-2,-1)[0].urls.filter(u => u.url == url).length, });
       }
     });
 }
@@ -1018,11 +1018,11 @@ export async function syncLocalWithFollowsCsv() {
 
   let instance = await getInstance();
   console.log("syncLocalWithFollowsCsv", instance);
-  // console.log("syncLocalWithFollowsCsv", cache);
-  // console.log("syncLocalWithFollowsCsv", await getStorage());
+  console.log("syncLocalWithFollowsCsv", cache);
+  console.log("syncLocalWithFollowsCsv", await getStorage());
 
   if (instance) {
-    // console.log("syncLocalWithFollowsCsv", instance);
+    console.log("syncLocalWithFollowsCsv", instance);
 
     return fetch(instance + "settings/exports/follows.csv")
     .then(response => response.text()).then(text => {
@@ -1041,7 +1041,7 @@ export async function syncLocalWithFollowsCsv() {
 
       let timestamp = new Date();
       let follows = { timestamp, content };
-      // console.log("syncLocalWithFollowsCsv content", follows);
+      console.log("syncLocalWithFollowsCsv content", follows);
       cache.follows = follows;
 
       return setStorage({ follows }, { local: true });
@@ -1346,16 +1346,26 @@ export async function onUpdated(tabId, changeInfo, tab) {
 async function syncContextMenus() {
   await chrome.contextMenus.removeAll();
   // todo use extension checkbox to determine if context menu should be created
-  await chrome.contextMenus.create({
-    "id": "context",
-    "title": "Toggle Mastodon Page 🐘 🐘 🐘 Jump Now",
-    "documentUrlPatterns": [
-      "*://*/@*",
-      "*://*/users/*",
-      "*://*/web/statuses/*"
-    ]
-  });
+  if (await getStorageProperty("ContextMenu")) {
+    console.log("syncContextMenus", "context menu enabled");
 
+    if (await getStorageProperty("ContextMenuJump")) {
+      await chrome.contextMenus.create({
+        "id": "context",
+        "title": "Toggle Mastodon Page 🐘 🐘 🐘 Jump Now",
+        "documentUrlPatterns": [
+          "*://*/@*",
+          "*://*/users/*",
+          "*://*/web/statuses/*"
+        ]
+      });
+    } else {
+      console.log("syncContextMenus", "context menu jump disabled");
+    }
+
+  } else {
+    console.log("syncContextMenus", "context menu disabled");
+  }
   // todo toggle redirect menu for autojump status, account, copypaste
 }
 
@@ -1402,67 +1412,102 @@ async function checkFollows(url, settings) {
         console.log("checkFollows", "path too long, not a profile page");
         console.log("checkFollows", "path", path);
 
+      } else if (path.length == 0) {
+        console.log("checkFollows", "path too short, not a profile page");
+        console.log("checkFollows", "path", path);
       } else {
+        console.log("checkFollows", "path", path);
+      }
 
-        let handle = path[0];
+      let handle = path[0];
 
-        if (handle.startsWith("@")) {
-          handle = handle.substring(1);
-        }
+      if (handle.startsWith("@")) {
+        handle = handle.substring(1);
+      }
 
-        let handleSplit = handle.split("@");
+      let handleSplit = handle.split("@");
 
-        let username = handleSplit[0];
+      let username = handleSplit[0];
 
-        if (handleSplit.length > 1) {
-          instance = handleSplit[1];
-        }
+      if (handleSplit.length > 1) {
+        instance = handleSplit[1];
+      }
 
-        let account = username + "@" + instance;
+      let account = username + "@" + instance;
 
-        console.log("checkFollows", "handleSplit", {username, instance, result, cache});
+      console.log("checkFollows", "handleSplit", {username, instance, result, cache});
 
-        if (account in result.follows.content) {
-          console.log("checkFollows", "account in follows", account);
-          return { url: result.InstanceHttps + "@" + account, following: true };
+      if (account in result.follows.content) {
+        console.log("checkFollows", "account in follows", account);
+        return { url: result.InstanceHttps + "@" + account, following: true };
 
-        } else {
-          console.log("checkFollows", "account not in follows", account, result.follows);
+      } else {
+        console.log("checkFollows", "account not in follows", account, result.follows);
 
-          let webAccount = await getWebfingerAccount(instance, username);
-          let [webAccountUsername, webAccountInstance] = webAccount.split("@");
+        let webAccount = await getWebfingerAccount(instance, username);
+        let [webAccountUsername, webAccountInstance] = webAccount.split("@");
 
-          if (webAccount in result.follows.content) {
-            console.log("checkFollows", "webAccount in follows", webAccount);
-            return { url: result.InstanceHttps + "@" + webAccount, following: true };
+        if (webAccount in result.follows.content) {
+          console.log("checkFollows", "webAccount in follows", webAccount);
+          return { url: result.InstanceHttps + "@" + webAccount, following: true };
 
-          } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
-            console.log("checkFollows", "follows is too old", result.follows.timestamp);
+        } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
+          console.log("checkFollows", "follows is too old", result.follows.timestamp);
 
-            await syncLocalWithFollowsCsv();
+          await syncLocalWithFollowsCsv();
 
-            if (account in result.follows.content) {
-              console.log("checkFollows", "account in follows now", account);
-              return { url: result.InstanceHttps + "@" + account, following: true };
-
-            } else {
-              console.log("checkFollows", "account not in follows now", account);
-            }
+          if (account in result.follows.content) {
+            console.log("checkFollows", "account in follows now", account);
+            return { url: result.InstanceHttps + "@" + account, following: true };
 
           } else {
-            console.log("checkFollows", "follows is not too old", result.follows.timestamp);
+            console.log("checkFollows", "account not in follows now", account);
           }
+
+        } else {
+          console.log("checkFollows", "follows is not too old", result.follows.timestamp);
         }
       }
+
+      console.log("checkFollows", "account not in follows", account, result.follows);
+
+      if (get(settings, "noSync")) {
+        console.log("checkFollows", "noSync", { result, keys, url });
+        return { url: result.InstanceHttps + "@" + account, following: false };
+
+      } else {
+        console.log("checkFollows", "inner sync", { result, keys, url });
+
+        await syncLocalWithFollowsCsv();
+
+        settings = settings || {};
+        settings.noSync = true;
+
+        return checkFollows(url, settings);
+      }
+
     }
 
   } else if (!get(settings, "noSync")) {
-    console.log("checkFollows", "invalid", { result, keys, url });
+    console.log("checkFollows", "outer sync", { result, keys, url });
 
     await syncLocalWithFollowsCsv();
 
-    return checkFollows(url, { noSync: true });
+    settings.noSync = true;
+
+    return checkFollows(url, settings);
+
+  } else {
+    console.log("checkFollows", "no result", { result, keys, url, settings });
   }
+
+  let urlObject = new URL(url);
+  let followsUrl = new URL(result.InstanceHttps);
+  followsUrl.pathname = urlObject.pathname.split("/")[1];
+
+  console.log("checkFollows", "not following", "followsUrl", "backup generated", { followsUrl, urlObject, result, settings });
+
+  return { url: followsUrl.href, following: false };
 }
 
 export async function sendMessage(tabId, response, settings) {
@@ -1487,8 +1532,11 @@ export async function sendMessage(tabId, response, settings) {
     Object.assign(response, { content: copy });
   }
 
-  console.log("sendMessage", { tabId, response, settings });
-  return chrome.tabs.sendMessage(tabId, response);
+  try {
+    return chrome.tabs.sendMessage(tabId, response);
+  } catch (error) {
+    // console.error("sendMessage", error);
+  }
 }
 
 export async function onMessage(message, sender, sendResponse) {
@@ -1522,7 +1570,14 @@ export async function onMessage(message, sender, sendResponse) {
   console.log("onMessage", message, sender, sendResponse, response);
 
   let senderUrl = new URL(sender.tab.url);
-  let instance = new URL(await getInstance());
+
+  // let instance = new URL(await getInstance());
+  let instance;
+  try {
+    instance = new URL(await getInstance());
+  } catch (error) {
+    // console.error("onMessage", "getInstance", error);
+  }
 
   if (message.type == "getStorage") {
     Object.assign(response.content, await getStorage(message.content.keys, { strict: true }));
@@ -1543,8 +1598,6 @@ export async function onMessage(message, sender, sendResponse) {
       console.log("onMessage", "follow", "id", { id, account, accounts, searchResult, response, message, sender});
 
       if (id) {
-        let verifyResult = await verify();
-        console.log("onMessage", "follow", "verify", verifyResult);
         let result = await follow(id);
         sendMessage(sender.tab.id, response, { type: "following", content: result });
       } else {
@@ -1557,20 +1610,34 @@ export async function onMessage(message, sender, sendResponse) {
   } else if (message.type == "onLoad" && senderUrl && senderUrl.hostname !== instance.hostname) {
     console.log("onMessage", "onLoad", message, sender, sendResponse, response);
 
-    let followResult = await checkFollows(senderUrl.href);
-    if (!followResult) {
-      console.log("onMessage", "onLoad", "no followResult", { followResult, senderUrl });
-      return;
-    }
-    let followUrl = new URL(followResult.url);
+    let followListenerProperty = await getStorageProperty("FollowListener");
+    let followingProperty = await getStorageProperty("Following");
 
-    if (followResult.following) {
-      console.log("onMessage", "onLoad", "following", { followResult, followUrl, senderUrl });
-      sendMessage(sender.tab.id, response, { type: "following", content: { url: followUrl.href } });
+    if (followListenerProperty || followingProperty) {
+      console.log("onMessage", "onLoad", "following check enabled", { senderUrl, instance, followListenerProperty, followingProperty });
+
+      let followResult = await checkFollows(senderUrl.href);
+
+      if (!followResult) {
+        console.log("onMessage", "onLoad", "no followResult", { followResult, senderUrl });
+        return;
+      }
+      let followUrl = new URL(followResult.url);
+
+      if (followingProperty && followResult.following) {
+        console.log("onMessage", "onLoad", "following", { followResult, followUrl, senderUrl });
+        sendMessage(sender.tab.id, response, { type: "following", content: { url: followUrl.href } });
+
+      } else if (followListenerProperty) {
+        console.log("onMessage", "onLoad", "not following", "addFollowListener", { followResult, followUrl, senderUrl });
+        sendMessage(sender.tab.id, response, { type: "addFollowListener", content: { url: followUrl.href } });
+
+      } else {
+        console.log("onMessage", "onLoad", "not following", "no message sent",  { followResult, followUrl, senderUrl });
+      }
 
     } else {
-      console.log("onMessage", "onLoad", "not following", "addFollowListener", { followResult, url, followUrl, senderUrl });
-      sendMessage(sender.tab.id, response, { type: "addFollowListener", content: { url: followUrl.href } });
+      console.log("onMessage", "onLoad", "following check disabled", { senderUrl });
     }
 
     onUpdated(sender.tab.id, { status: "onMessage", onMessage: true, response }, sender.tab);
@@ -1589,7 +1656,7 @@ export async function onMessage(message, sender, sendResponse) {
 }
 
 export function onAlarm(alarm) {
-  // console.log("onAlarm", alarm);
+  console.log("onAlarm", alarm);
 
   if (alarm.name === "syncCacheWithStorage") {
     syncCacheWithStorage();
@@ -1599,7 +1666,28 @@ export function onAlarm(alarm) {
   }
 }
 
-chrome.action.onClicked.addListener(onClicked);
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log("action.onClicked", tab);
+  if (await getStorageProperty("OnClickedToggle")) {
+    console.log("action.onClicked", "action enabled");
+    onClicked(tab);
+  } else {
+    console.log("action.onClicked", "action disabled");
+  }
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (await getStorageProperty("Shortcuts")) {
+    console.log("commands.onCommand", "command enabled");
+    if (command === "toggle") {
+      console.log("commands.onCommand", command);
+    } else {
+      console.log("commands.onCommand", "Unknown command", command);
+    }
+  } else {
+    console.log("commands.onCommand", "command disabled");
+  }
+});
 
 chrome.alarms.create("syncCacheWithStorage", {periodInMinutes: 3});
 chrome.alarms.create("syncLocalWithFollowsCsv", {periodInMinutes: 5});
@@ -1608,7 +1696,7 @@ chrome.alarms.onAlarm.addListener(onAlarm);
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   console.log("contextMenus.onClicked", info, tab);
 
-  if (info.menuItemId == "context") {
+  if (info.menuItemId == "context" && await getStorageProperty("ContextMenuToggle")) {
     await onClicked(tab);
   }
 });
@@ -1635,11 +1723,14 @@ console.log("background.js", "loaded");
     console.log("background.js", "synced cache with storage");
   })())();
 
-console.log("background.js", "done");
+// console.log("background.js", "done");
+
 // todo: when follow is clicked set it to pending
+
 // todo on follow click return
 //      url of home instance profile
 //      not same url clicked.
+
 // TODO: be able to edit profile while extension is enabled
     //   don't add listener if not following and is instance
 
@@ -1651,6 +1742,7 @@ console.log("background.js", "done");
 
 
 // todo: context menu for toggle autoredirect
+
 // TODO allow jump back from this??????
 //   <!-- https://hub.libranet.de/channel/la_teje8685?mid=b64.aHR0cHM6Ly9odWIubGlicmFuZXQuZGUvaXRlbS9kNTM4NzZlOS01Y2I0LTRjMjQtOTY5OS1kOTE5NjRjZmU2NTk -->
 

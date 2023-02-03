@@ -26,19 +26,25 @@ async function sendMessage(message, timestamp) {
   }
 
   if (!messageObject.type) {
-    console.log("content.js", "no message type", messageObject);
+    // console.log("content.js", "no message type", messageObject);
 
     if (typeof message === "string") {
-      console.log("content.js", "message is string. setting message type to message", { messageObject, message });
+      // console.log("content.js", "message is string. setting message type to message", { messageObject, message });
       messageObject.type = message;
 
     } else {
-      console.log("content.js", "message is not string. leaving message type unset.", { messageObject, message });
+      // console.log("content.js", "message is not string. leaving message type unset.", { messageObject, message });
     }
   }
-  console.log("content.js", "sending message", messageObject);
+  // console.log("content.js", "sending message", messageObject);
 
-  return chrome.runtime.sendMessage(messageObject);
+  try {
+    await chrome.runtime.sendMessage(messageObject);
+  } catch (error) {
+    console.log("content.js", "sendMessage", "error", error);
+    Promise.reject(error);
+  }
+  Promise.resolve();
 }
 
 function getCallbackTimestamp(group, callback) {
@@ -57,7 +63,7 @@ function getCallbackTimestamp(group, callback) {
     }
     object = cache[group];
   }
-  console.log("content.js", "getCallbackTimestamp", "got callback timestamp", { group, timestamp, callback });
+  // console.log("content.js", "getCallbackTimestamp", "got callback timestamp", { group, timestamp, callback });
 
   if (
       object[timestamp] === undefined ||
@@ -69,19 +75,19 @@ function getCallbackTimestamp(group, callback) {
   }
 
   object[timestamp].callback = callback ? callback : function(result) {
-    console.log("content.js", "defaultCallback_getCallbackTimestamp", "got result", { result });
+    // console.log("content.js", "defaultCallback_getCallbackTimestamp", "got result", { result });
   }
-  console.log("content.js", "getCallbackTimestamp", "got callback timestamp", { group, timestamp, callback });
+  // console.log("content.js", "getCallbackTimestamp", "got callback timestamp", { group, timestamp, callback });
 
   if (group) {
-    console.log("content.js", "getCallbackTimestamp", "returning with group", { group, timestamp, callback });
+    // console.log("content.js", "getCallbackTimestamp", "returning with group", { group, timestamp, callback });
     Object.assign(cache[group], object);
     // cache[group].counter++;
     // cache.counter++;
     return {group, timestamp};
 
   } else {
-    console.log("content.js", "getCallbackTimestamp", "returning without group", { group, timestamp, callback });
+    // console.log("content.js", "getCallbackTimestamp", "returning without group", { group, timestamp, callback });
     Object.assign(cache, object);
     // cache.counter++;
     return {timestamp};
@@ -89,7 +95,7 @@ function getCallbackTimestamp(group, callback) {
 }
 
 async function onMessage(message) {
-  console.log("content.js", "onMessage", "got message", message);
+  // console.log("content.js", "onMessage", "got message", message);
   if (Array.isArray(message)) {
     return Promise.allSettled(message.map(onMessage));
   }
@@ -100,7 +106,7 @@ async function onMessage(message) {
       sendMessage({ type: "echoResponse", content: message.content });
 
     } else {
-      console.log("content.js", "onMessage", "no message type found", message);
+      // console.log("content.js", "onMessage", "no message type found", message);
     }
   }
 
@@ -123,7 +129,7 @@ async function onMessage(message) {
       await cache[message.timestamp].callback(message);
 
     } else {
-      console.log("content.js", "onMessage", "no callback for message", message);
+      // console.log("content.js", "onMessage", "no callback for message", message);
     }
   }
 
@@ -131,7 +137,7 @@ async function onMessage(message) {
 }
 
 function fixFollowButton(button, url) {
-  console.log("content.js", "fixFollowButton", "fixing follow button", button, url);
+  // console.log("content.js", "fixFollowButton", "fixing follow button", button, url);
 
   let buttonA = document.createElement("a");
   buttonA.href = url;
@@ -143,32 +149,32 @@ function fixFollowButton(button, url) {
   button.innerHTML = buttonA.outerHTML;
 
   button.addEventListener("click", function(event) {
-    console.log("content.js", "fixFollowButton", "follow button clicked", event);
+    // console.log("content.js", "fixFollowButton", "follow button clicked", event);
     window.open(url, "_self");
   }, { passive: true });
 }
 
 function addFollowListener(button, url) {
-  console.log("content.js", "addFollowListener", "adding follow listener", button, url);
+  // console.log("content.js", "addFollowListener", "adding follow listener", button, url);
 
   button.addEventListener("click", function(event) {
-    console.log("content.js", "handleOnLoadResult", "follow button clicked", event);
+    // console.log("content.js", "handleOnLoadResult", "follow button clicked", event);
     event.preventDefault();
     event.stopPropagation();
     button.innerHTML = "Follow...";
     sendMessage({ type: "follow", url }, getCallbackTimestamp("follow", function(result) {
-      console.log("content.js", "addFollowListener", "got follow result", result);
+      // console.log("content.js", "addFollowListener", "got follow result", result);
 
       if (result.type === "following" && (!result.content || !('error' in result.content))) {
         fixFollowButton(button, url);
 
       } else {
-        console.log("content.js", "addFollowListener", "got unexpected result", result);
+        // console.log("content.js", "addFollowListener", "got unexpected result", result);
       }
 
     }));
   }, { passive: false });
-  console.log("content.js", "addFollowListener", "added follow listener", button, url);
+  // console.log("content.js", "addFollowListener", "added follow listener", button, url);
 }
 
 async function findFollowButton(url, callback, settings) {
@@ -185,13 +191,13 @@ async function findFollowButton(url, callback, settings) {
     button = document.querySelector(querySelector);
 
     if (button) {
-      console.log("content.js", "handleOnLoadResult", "found follow button", { button, url, callback, settings, querySelector, timeoutInSeconds });
+      // console.log("content.js", "handleOnLoadResult", "found follow button", { button, url, callback, settings, querySelector, timeoutInSeconds });
       clearInterval(buttonCheckInterval);
       callback(button, url);
     }
 
     if (Date.now() - timeNow > (timeoutInSeconds * 1000)) {
-      console.log("content.js", "handleOnLoadResult", "follow button not found", { button, url, callback, settings, querySelector, timeoutInSeconds });
+      // console.log("content.js", "handleOnLoadResult", "follow button not found", { button, url, callback, settings, querySelector, timeoutInSeconds });
       clearInterval(buttonCheckInterval);
     }
   }, 50);
@@ -204,43 +210,43 @@ async function handleOnLoadResult(result) {
   if (type && url) {
 
     if (type === "open") {
-      console.log("content.js", "handleOnLoadResult", "open", url);
+      // console.log("content.js", "handleOnLoadResult", "open", url);
       window.open(url, "_self");
 
     } else if (type === "following") {
-      console.log("content.js", "handleOnLoadResult", "following", url);
+      // console.log("content.js", "handleOnLoadResult", "following", url);
 
       await findFollowButton(url, fixFollowButton, result);
 
 
     } else if (type === "addFollowListener") {
-      console.log("content.js", "handleOnLoadResult", "not following", "addFollowListener", url);
+      // console.log("content.js", "handleOnLoadResult", "not following", "addFollowListener", url);
 
       await findFollowButton(url, addFollowListener, result);
 
     } else {
-      console.log("content.js", "handleOnLoadResult", "no url type found", { type, url, result });
+      // console.log("content.js", "handleOnLoadResult", "no url type found", { type, url, result });
     }
 
   } else if (type) {
-    console.log("content.js", "handleOnLoadResult", "no url", { type, url, result });
+    // console.log("content.js", "handleOnLoadResult", "no url", { type, url, result });
 
     if (type === "addFollowListener") {
-      console.log("content.js", "handleOnLoadResult", "not following", url);
+      // console.log("content.js", "handleOnLoadResult", "not following", url);
 
       await findFollowButton(window.location.href, addFollowListener, result);
     }
 
   } else {
-    console.log("content.js", "handleOnLoadResult", "no type", { type, url, result });
+    // console.log("content.js", "handleOnLoadResult", "no type", { type, url, result });
   }
 
-  console.log("content.js", "handleOnLoadResult", "result", result);
+  // console.log("content.js", "handleOnLoadResult", "result", result);
   return Promise.resolve();
 };
 
 async function onLoadResult(result) {
-  console.log("content.js", "onLoadResult", "got onLoad result", result);
+  // console.log("content.js", "onLoadResult", "got onLoad result", result);
 
   if (Array.isArray(result)) {
     await Promise.allSettled(result.content.map(handleOnLoadResult));
@@ -249,7 +255,7 @@ async function onLoadResult(result) {
     await handleOnLoadResult(result);
   }
 
-  console.log("content.js", "onLoadResult", "result", result);
+  // console.log("content.js", "onLoadResult", "result", result);
   return Promise.resolve();
 }
 
@@ -276,7 +282,9 @@ let urlCheckInterval = setInterval(function() {
     timeNow = Date.now();
   }
 
-  if (Date.now() - timeNow > (5 * 60 * 1000)) {
+  if (Date.now() - timeNow > (300 * 60 * 1000)) {
     clearInterval(urlCheckInterval);
   }
-}, 2000);
+}, 50);
+
+console.log("content.js", "loaded", window.location.href);

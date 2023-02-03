@@ -1,5 +1,5 @@
 export function get(object, property, settings) {
-  console.log("get", { object, property, settings });
+  // console.log("get", { object, property, settings });
   let defaultValue = settings ? get(settings, "default") : null;
 
   let resultCondition = object &&
@@ -11,7 +11,7 @@ export function get(object, property, settings) {
       object[property] !== null
   let result = resultCondition ? object[property] : defaultValue;
 
-  console.log("get", "result", { resultCondition, defaultValue, result });
+  // console.log("get", "result", { resultCondition, defaultValue, result });
   return result;
 }
 
@@ -74,13 +74,13 @@ export async function extensionPermissionsToRequestForReadWriteAllOrigin() {
 }
 
 export async function requestPermissions(permissions) {
-  console.log("requesting permissions", permissions);
+  // console.log("requesting permissions", permissions);
   return chrome.permissions.request(permissions);
 }
 
 export async function setStorage(object) {
   // TODO:   if(chrome.runtime.lastError) {
-  console.log("setStorage", object);
+  // console.log("setStorage", object);
   return chrome.storage.sync.set(object);
 }
 
@@ -93,7 +93,7 @@ export async function getStorage(keys) {
   let local = await chrome.storage.local.get(Array.isArray(keys) ? keys : [keys]);
   let result = {};
   Object.assign(result, sync, local);
-  console.log("getStorage", { keys, result, sync, local });
+  // console.log("getStorage", { keys, result, sync, local });
   return result;
 }
 
@@ -102,7 +102,7 @@ export async function getStorageProperty(name, defaultValue = null) {
     name = name[0];
   }
   let result = await getStorage([name]);
-  console.log("getStorageProperty", { name, result, defaultValue });
+  // console.log("getStorageProperty", { name, result, defaultValue });
   return get(result, name, { default: defaultValue });
 }
 
@@ -138,14 +138,14 @@ export async function getInstance(isNotForceHttps) {
 }
 
 export async function authorizeUser() {
-  console.log("authorizeUser");
+  // console.log("authorizeUser");
   const url = new URL(await getInstance() + "oauth/authorize");
-  console.log("authorizeUser", url);
+  // console.log("authorizeUser", url);
   url.searchParams.append("response_type", "code");
   url.searchParams.append("client_id", await getClientId());
   url.searchParams.append("redirect_uri", await getRedirectUri());
   url.searchParams.append("scope", await getAppPermissions());
-  console.log("authorizeUser", url);
+  // console.log("authorizeUser", url);
   newTab(url);
   window.location.reload(); // comment out during development
   // todo consider dynamic reload of options page values instead of full page reload
@@ -197,7 +197,7 @@ export async function makeApp() {
       // }
 
   */
-  console.log("Making App");
+  // console.log("Making App");
   const url = new URL((await getInstance()) + "api/v1/apps");
   const host = url.host;
   const formData = new FormData();
@@ -209,7 +209,7 @@ export async function makeApp() {
     "website",
     chrome.runtime.getManifest().homepage_url
   );
-  console.log("makeApp", { url, formData });
+  // console.log("makeApp", { url, formData });
   let result = await fetch(url, {
     method: "POST",
     body: formData,
@@ -217,10 +217,10 @@ export async function makeApp() {
   ).then(result => {
     return result;
   });
-  console.log("makeApp result", { result });
+  // console.log("makeApp result", { result });
 
   if (!result || result.error) {
-    console.error("makeApp error", { result });
+    // console.error("makeApp error", { result });
     return result;
   }
 
@@ -235,7 +235,7 @@ export async function makeApp() {
 
 export async function onResult() {
   let result = getStorage(["follows", "Instance"])
-  console.log("onResult", { result });
+  // console.log("onResult", { result });
 
   if (result.Instance) {
     let instanceLabel = result.Instance;
@@ -258,7 +258,7 @@ export async function permissionDeniedInstance() {
 }
 
 export async function initializeStorage(input) {
-  console.log("initializeStorage", input);
+  // console.log("initializeStorage", input);
   let result = await setStorage({
     Instance: input,
     InstanceHttps: makeHttps(input),
@@ -267,10 +267,10 @@ export async function initializeStorage(input) {
     OauthApp: false,
     Version: getCurrentVersion(),
   }).then(async (result) => {
-    console.log("initializeStorage", {result});
+    // console.log("initializeStorage", {result});
     await onResult();
   });
-  console.log(result);
+  // console.log(result);
 }
 
 export async function setOauthOption(value) {
@@ -282,9 +282,9 @@ export async function setChromeReadWriteAllOption(value) {
 }
 
 export async function initializeChromeReadWriteAllOrigin() {
-  console.log("initializeChromeReadWriteAllOrigin");
+  // console.log("initializeChromeReadWriteAllOrigin");
   let permissions = await extensionPermissionsToRequestForReadWriteAllOrigin();
-  console.log("initializeChromeReadWriteAllOrigin", {permissions});
+  // console.log("initializeChromeReadWriteAllOrigin", {permissions});
 
   return await requestPermissions(
     permissions
@@ -293,7 +293,7 @@ export async function initializeChromeReadWriteAllOrigin() {
 }
 
 export async function initializeMastodonOauthApp() {
-  console.log("initializeMastodonOauthApp");
+  // console.log("initializeMastodonOauthApp");
   return makeApp()
   .then(() => authorizeUser()
   ).then(() => setOauthOption(true)
@@ -301,17 +301,17 @@ export async function initializeMastodonOauthApp() {
 }
 
 export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, element, settings) {
-  console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {option, element, settings});
+  // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {option, element, settings});
   let checked = get(element, "checked");
-  console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {checked});
+  // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {checked});
 
   if (checked) {
-    console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "checked");
+    // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "checked");
     await initializeChromeReadWriteAllOrigin(
     ).then(async () => setOauthOption(true)
     ).catch(async () => setOauthOption(false));
   } else {
-    console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
+    // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
     await setOauthOption(false);
   }
   // window.location.reload(); // comment out during development
@@ -319,14 +319,14 @@ export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, eleme
 }
 
 export async function ifTrueThenInitializeMastodonOauthApp(option, element, settings) {
-  console.log("ifTrueThenInitializeMastodonOauthApp", {option, element, settings});
+  // console.log("ifTrueThenInitializeMastodonOauthApp", {option, element, settings});
   let followingElement = document.getElementById("FollowListener");
 
   if (get(element, "checked")) {
-    console.log("ifTrueThenInitializeMastodonOauthApp", "checked");
+    // console.log("ifTrueThenInitializeMastodonOauthApp", "checked");
     await initializeMastodonOauthApp(
     ).then(async () => {
-      console.log("ifTrueThenInitializeMastodonOauthApp", "initializeMastodonOauthApp");
+      // console.log("ifTrueThenInitializeMastodonOauthApp", "initializeMastodonOauthApp");
       if (followingElement) {
         await setStorageWithProperty("FollowListener", true);
         followingElement.disabled = false;
@@ -334,12 +334,12 @@ export async function ifTrueThenInitializeMastodonOauthApp(option, element, sett
         followingElement.classList.add("enabled");
         followingElement.classList.remove("disabled");
       } else {
-        console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
+        // console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
       }
     }).then(() => setOauthOption(true)
     ).catch(() => setOauthOption(false));
   } else {
-    console.log("ifTrueThenInitializeMastodonOauthApp", "unchecked");
+    // console.log("ifTrueThenInitializeMastodonOauthApp", "unchecked");
     await setOauthOption(false);
     if (followingElement) {
       await setStorageWithProperty("FollowListener", false);
@@ -348,7 +348,7 @@ export async function ifTrueThenInitializeMastodonOauthApp(option, element, sett
       followingElement.checked = false;
       followingElement.disabled = true;
     } else {
-      console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
+      // console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
     }
   }
   // window.location.reload(); // comment out during development
@@ -362,7 +362,7 @@ export async function onClicked() {
 
   if (input && input != "Thanks!") {
     let instance = await getInstance();
-    console.log("onClicked", { input, instance });
+    // console.log("onClicked", { input, instance });
 
     if (!instance || instance != input) {
       await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
@@ -377,7 +377,7 @@ export async function onClicked() {
 }
 
 export async function setupOptionsListenerById(option, settings) {
-  console.log("setupOptionsListenerById", {option, settings});
+  // console.log("setupOptionsListenerById", {option, settings});
   // todo: setupOptionsListenerById 'dependencyCallback'
   // exampe callback
   // if oauth is enabled,
@@ -399,23 +399,23 @@ export async function setupOptionsListenerById(option, settings) {
   let element = document.getElementById(option);
   let dropdown = option + "Dropdown";
   let dropdownElement = document.getElementById(dropdown);
-  console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
+  // console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
   if (element) {
     let result = await getStorageProperty(option);
-    console.log("setupOptionsListenerById", {option, result});
+    // console.log("setupOptionsListenerById", {option, result});
 
     if (result === null || result === undefined) {
-      console.log("setting default for", option);
+      // console.log("setting default for", option);
       result = get(settings, "default", { default: false });
-      console.log("result", {option, result});
+      // console.log("result", {option, result});
       await setStorageWithProperty(option, result);
     }
 
     element.checked = result ? true : false;
 
     let defaultCallback = async () => {
-      console.log("defaultCallback", {option, element});
+      // console.log("defaultCallback", {option, element});
       if (dropdownElement) {
           dropdownElement.disabled = !element.checked;
 
@@ -429,11 +429,11 @@ export async function setupOptionsListenerById(option, settings) {
     let callbackFunction = defaultCallback;
     let callbackSetting = get(settings, "callback");
 
-    console.log("callbackSetting", {option, callbackSetting});
+    // console.log("callbackSetting", {option, callbackSetting});
 
     if (callbackSetting) {
       callbackFunction = () => {
-        console.log("callbackFunction", {option, element});
+        // console.log("callbackFunction", {option, element});
         callbackSetting(option, element, settings);
       }
     }
@@ -451,21 +451,21 @@ export async function setupOptionsListenerById(option, settings) {
   }
 
   if (dropdownElement) {
-    console.log("dropdownElement", {dropdown, dropdownElement});
+    // console.log("dropdownElement", {dropdown, dropdownElement});
     let dropdownDefault = get(settings, "dropdownDefault");
     let result = await getStorageProperty(dropdown);
 
     if (result === null || result === undefined) {
-      console.log("setting default for", dropdown);
+      // console.log("setting default for", dropdown);
       result = dropdownDefault;
-      console.log("result", {dropdown, result});
+      // console.log("result", {dropdown, result});
       await setStorageWithProperty(dropdown, result);
     }
 
     dropdownElement.value = result;
 
     let dropdownDefaultCallback = async () => {
-      console.log("defaultDropdownCallback", {dropdown, dropdownElement});
+      // console.log("defaultDropdownCallback", {dropdown, dropdownElement});
       await setStorageWithProperty(dropdown, dropdownElement.value);
     }
 
@@ -474,7 +474,7 @@ export async function setupOptionsListenerById(option, settings) {
 
     if (dropdownCallbackSetting) {
       dropdownCallbackFunction = () => {
-        console.log("dropdownCallbackFunction", {dropdown, dropdownElement});
+        // console.log("dropdownCallbackFunction", {dropdown, dropdownElement});
         dropdownCallbackSetting(dropdown, dropdownElement, settings);
       }
     }
@@ -488,7 +488,7 @@ export async function setupOptionsListenerById(option, settings) {
     dropdownElement.disabled = !element.checked;
   }
 
-  console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
+  // console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
   return element;
 }
@@ -516,9 +516,10 @@ export async function onLoad() {
       await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonOauthApp });
       await setupOptionsListenerById("UpdateStats", { disabled: true });
       await setupOptionsListenerById("Following", { disabled: false, default: true  });
-      await setupOptionsListenerById("OnClickedToggle", { disabled: false, default: true });
+      await setupOptionsListenerById("OnClickedJump", { disabled: false, default: true });
+      await setupOptionsListenerById("ContextMenuJump", { disabled: false, default: true });
       await setupOptionsListenerById("ContextMenu", { disabled: false, default: true });
-      await setupOptionsListenerById("Shortcut", { disabled: false, default: true });
+      await setupOptionsListenerById("Shortcuts", { disabled: true, default: true });
 
       let shortcutsButtonElement = document.getElementById("shortcutsButton");
 
@@ -543,7 +544,7 @@ export async function onLoad() {
     } else if (instanceLabel) {
 
       if (result.follows) {
-        console.log("result.follows", result.follows);
+        // console.log("result.follows", result.follows);
 
         if (result.follows.content && Object.keys(result.follows.content).length > 0) {
           instanceLabel =
