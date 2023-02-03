@@ -2,6 +2,13 @@ let cache = { counter: 0 };
 
 async function sendMessage(message, timestamp) {
 
+
+  if (cache["portDisconnected"]) {
+    console.log("content.js", "sendMessage", "port disconnected. not sending message", message);
+    Promise.resolve();
+    return;
+  }
+
   if (Array.isArray(message)) {
     return Promise.allSettled(message.map((message) => sendMessage(message, timestamp)));
   }
@@ -42,7 +49,6 @@ async function sendMessage(message, timestamp) {
     await chrome.runtime.sendMessage(messageObject);
   } catch (error) {
     console.log("content.js", "sendMessage", "error", error);
-    Promise.reject(error);
   }
   Promise.resolve();
 }
@@ -265,7 +271,14 @@ async function onLoad() {
   // TODO autojump .copypaste prompt
 }
 
+function cleanupOnDisconnect() {
+  console.log("content.js", "cleanupOnDisconnect", "cleaning up on disconnect");
+  cache["portDisconnected"] = true;
+}
+
 chrome.runtime.onMessage.addListener(onMessage);
+port = chrome.runtime.connect({ name: "onLoad" });
+port.onDisconnect.addListener(cleanupOnDisconnect);
 
 onLoad();
 

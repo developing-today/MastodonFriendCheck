@@ -1666,6 +1666,15 @@ export function onAlarm(alarm) {
   }
 }
 
+export function onConnect(port) {
+  console.log('connected ', port);
+
+  if (port.name === 'onLoad') {
+    console.log('onLoad connected ', { port, "this": this });
+    port.onMessage.addListener(this.processMessage);
+  }
+}
+
 chrome.action.onClicked.addListener(async (tab) => {
   console.log("action.onClicked", tab);
   if (await getStorageProperty("OnClickedToggle")) {
@@ -1701,6 +1710,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
+chrome.runtime.onConnect.addListener(onConnect);
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.runtime.onMessage.addListener(onMessage);
 
