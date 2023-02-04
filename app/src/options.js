@@ -52,9 +52,7 @@ export function logWithLevel (level, ...args) {
     let caller =
       metadata.function.indexOf('/') === -1 ? metadata.function : metadata.file
     Object.assign(metadata, { args })
-    let short = { '|': metadata }
-    short[caller] = metadata.line
-    console.log(short, ...args)
+    console.log(metadata.line, caller, ...args, [metadata])
   }
 }
 
@@ -67,7 +65,7 @@ export function error (...args) {
 }
 
 export function get (object, property, settings) {
-  log({ object, property, settings })
+  // log({ object, property, settings })
   let defaultValue = settings ? get(settings, 'default') : null
 
   let resultCondition =

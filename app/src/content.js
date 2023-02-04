@@ -1,6 +1,7 @@
 let cache = { counter: 0, handlers: {}, ports: {} }
 
 function isDebug () {
+  // See https://stackoverflow.com/a/20007136/470749
   return !('update_url' in chrome.runtime.getManifest())
 }
 let isDebugMode = isDebug()
@@ -29,7 +30,6 @@ function normalizeLine (line) {
 
 function logWithLevel (level, ...args) {
   if (isDebugMode) {
-    //See https://stackoverflow.com/a/27074218/470749
     var e = new Error()
     if (!e.stack) {
       try {
@@ -54,9 +54,7 @@ function logWithLevel (level, ...args) {
     let caller =
       metadata.function.indexOf('/') === -1 ? metadata.function : metadata.file
     Object.assign(metadata, { args })
-    let short = { '|': metadata }
-    short[caller] = metadata.line
-    console.log(short, ...args)
+    console.log(metadata.line, caller, ...args, [metadata])
   }
 }
 
@@ -232,7 +230,7 @@ async function onMessage (message) {
 }
 
 function fixFollowButton (button, url) {
-  log('fixing follow button', button, url)
+  log(button, url)
 
   let buttonA = document.createElement('a')
   buttonA.href = url
@@ -251,10 +249,11 @@ function fixFollowButton (button, url) {
     },
     { passive: true }
   )
+  log(button, url)
 }
 
 function addFollowListener (button, url) {
-  log('adding follow listener', button, url)
+  log(button, url)
 
   button.addEventListener(
     'click',
@@ -286,7 +285,7 @@ function addFollowListener (button, url) {
     },
     { passive: false }
   )
-  log('added follow listener', button, url)
+  log(button, url)
 }
 
 async function findFollowButton (url, callback, settings) {
@@ -509,13 +508,18 @@ async function onLoadHandler (input) {
 
 function onLoad () {
   log('onLoad', window.location.href)
-  chrome.runtime.connect(null, { name: 'onLoad' })
+  try {
+    // chrome.runtime.connect(null, { name: 'onLoad' })
+    chrome.runtime.sendMessage({ type: 'onLoad' })
+  } catch (e) {
+    log('error', e)
+  }
   onLoadHandler()
   setupUrlCheckInterval()
 }
 
 function defaultHandler (input) {
-  return cache?.['handlers']?.['default'](input)
+  return cache?.['handlers']?.['default'][0](input)
 }
 
 cache['handlers'] = {

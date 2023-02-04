@@ -46,43 +46,32 @@
     <input type="submit" type="button" name="button" id="submitButton" value="Refresh!" />
     <div class="optionsBox">
       <div>
-        Options:<br>
         <input type="checkbox" class="options disabled" id="Following" name="Following" value=false disabled=true>Follow>Following</input><br>
         <input type="checkbox" class="options disabled" id="FollowListener" name="FollowListener" value=false disabled=true>Remote Follow {oauth}</input><br>
         <input type="checkbox" class="options disabled" id="ContextMenu" name="ContextMenu" value=false disabled=true>Context Menu</input><br>
         <input type="checkbox" class="options disabled" id="OpenInNewTab"  name="OpenInNewTab" value=false disabled=true>Open In New Tab</input><br>
         <button class="options disabled" id="shortcutsButton">Assign Shortcuts</button>
-      </div>
-      <div>
-        Extra Permissions: <br>
         <input type="checkbox" class="options disabled" id="OauthApp"  name="OauthApp" value=false disabled=true>Grant OAuth (new tab)</input><br>
         <input type="checkbox" class="options disabled" id="ReadWriteAll"  name="ReadWriteAll" value=false disabled=true>Grant Write [all-url] (popup)</input><br>
-      </div>
-      <div>
+        <input type="checkbox" class="options disabled" id="Shortcuts" name="Shortcuts" value=false disabled=true>Secondary Shortcuts</input><br>
         Jump Page When: <br>
         <input type="checkbox" class="options disabled" id="OnClickedJump"  name="OnClickedJump" value=false disabled=true>Activate Extension Action</input><br>
         <input type="checkbox" class="options disabled" id="ContextMenuJump" name="ContextMenuJump" value=false disabled=true>Clicked Context Menu</input><br>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false disabled=true>[copy-prompt] Auto-Jump</input><br>
 
         <input type="checkbox" class="options disabled" id="AutoJumpOnLoadStatus" name="AutoJumpOnLoadStatus" value=false disabled=true>[status] Auto-Jump On</input><br>
         <select class="inner-note" id="AutoJumpOnLoadStatusDropdown" name="AutoJumpOnLoadStatusDropdown" value=false disabled=true>
           <option value="local" disabled=true>Local Status</option>
           <option value="remote" disabled=true>Remote Status</option>
-          <option value="first-opened" disabled=true>First Opened</option>
+          <option value="first-opened" disabled=true>First-Opened</option>
         </select><br>
 
-        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadAccount" name="AutoJumpOnLoadAccount" value=false disabled=true>[account] Auto-Jump On</input>
+        <input type="checkbox" class="options disabled" id="AutoJumpOnLoadAccount" name="AutoJumpOnLoadAccount" value=false disabled=true>[account] Auto-Jump On</input><br>
         <select class="inner-note" id="AutoJumpOnLoadAccountDropdown" name="AutoJumpOnLoadAccountDropdown" value=false disabled=true>
           <option value="remote"disabled=true>Remote Account</option>
           <option value="local" disabled=true>Local Account</option>
-          <option value="first-opened" disabled=true>First Opened</option>
+          <option value="first-opened" disabled=true>First-Opened</option>
         </select><br>
-
-      </div>
-      <div>
-        Additional Features: [beta]<br>
-        <input type="checkbox" class="options disabled" id="AutoJumpOnCopyPastePrompt" name="AutoJumpOnCopyPastePrompt" value=false disabled=true>[copy-prompt] Auto-Jump</input><br>
-        <input type="checkbox" class="options disabled" id="UpdateStats"  name="UpdateStats" value=false disabled=true>Update Stats {read-write}</input><br>
-        <input type="checkbox" class="options disabled" id="Shortcuts" name="Shortcuts" value=false disabled=true>Secondary Shortcuts</input><br>
       </div>
     </div>
   </body>

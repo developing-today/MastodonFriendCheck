@@ -54,9 +54,7 @@ export function logWithLevel (level, ...args) {
     let caller =
       metadata.function.indexOf('/') === -1 ? metadata.function : metadata.file
     Object.assign(metadata, { args })
-    let short = { '|': metadata }
-    short[caller] = metadata.line
-    console.log(short, ...args)
+    console.log(metadata.line, caller, ...args, [metadata])
   }
 }
 
@@ -70,7 +68,7 @@ export function error (...args) {
 
 export function getUrlOrNull (url) {
   try {
-    log('url', { url })
+    // log('url', { url })
     return new URL(url)
   } catch (e) {
     log('null', { url, e })
@@ -704,7 +702,7 @@ export async function getWebfingerAccount (instance, username) {
   return account.join('@')
 }
 
-export async function toggleMastodonUrl (url, settings) {
+export async function jumpMastodonUrl (url, settings) {
   // remote: https://mastodon.social/@elonjet
   // local:  https://hachyderm.io/@elonjet@mastodon.social
 
@@ -827,13 +825,12 @@ export async function toggleMastodonUrl (url, settings) {
 
             return mastodonUrlResult(statusUrl, settings)
           } else {
-            log(
-              'toggleMastodonUrl',
-              'remote-remote',
-              'status',
-              'no statusUrl',
-              { url, statusUrl, statusResult, searchResults }
-            )
+            log('jumpMastodonUrl', 'remote-remote', 'status', 'no statusUrl', {
+              url,
+              statusUrl,
+              statusResult,
+              searchResults
+            })
           }
         } else {
           log('remote-remote', 'no status', {
@@ -1047,8 +1044,8 @@ export async function toggleMastodonUrl (url, settings) {
   }
 }
 
-export async function toggleCurrentTab () {
-  return getCurrentTab().then(toggleMastodonTab)
+export async function jumpCurrentTab () {
+  return getCurrentTab().then(jumpMastodonTab)
 }
 
 export async function getToken () {
@@ -1149,7 +1146,7 @@ export async function follow (id) {
   return result
 }
 
-export async function toggleMastodonTab (tab, settings) {
+export async function jumpMastodonTab (tab, settings) {
   cache.lastUrls = cache.lastUrls || []
   cache.lastUrls.push({ urls: [tab.url], timestamp: Date.now() })
   cache.lastUrl = tab.url
@@ -1157,7 +1154,7 @@ export async function toggleMastodonTab (tab, settings) {
   cache.lastTabId = tab.id
   cache.lastTabUpdated = Date.now()
 
-  return toggleMastodonUrl(tab.url, settings).then(async result => {
+  return jumpMastodonUrl(tab.url, settings).then(async result => {
     if (!result) {
       log('no result')
       return
@@ -1176,7 +1173,7 @@ export async function toggleMastodonTab (tab, settings) {
       if (resultUrl.host != instance.host) {
         log('double remote', 'remote')
         delete settings.locality
-        result = await toggleMastodonUrl(result.url, settings)
+        result = await jumpMastodonUrl(result.url, settings)
       } else {
         log('double remote', 'local')
       }
@@ -1425,10 +1422,10 @@ export async function onClicked (tab) {
     return onInstalled({ reason: 'onClicked,noInstance' })
   }
 
-  if (await getStorageProperty('OnClickedToggle')) {
-    return await toggleMastodonTab(tab, { status: 'onClicked' })
+  if (await getStorageProperty('OnClickedJump')) {
+    return await jumpMastodonTab(tab, { status: 'onClicked' })
   } else {
-    log('OnClickedToggle disabled')
+    log('OnClickedJump disabled')
   }
 }
 
@@ -1742,21 +1739,21 @@ export async function onUpdated (tabId, changeInfo, tab) {
       }
       log('settings', settings)
 
-      return toggleMastodonTab(tab, settings)
+      return jumpMastodonTab(tab, settings)
     }
   }
 }
 
 async function syncContextMenus () {
   await chrome.contextMenus.removeAll()
-  // todo use extension checkbox to determine if context menu should be created
+  // todo use extension checkbox removeall on disabled
   if (await getStorageProperty('ContextMenu')) {
     log('context menu enabled')
 
     if (await getStorageProperty('ContextMenuJump')) {
       await chrome.contextMenus.create({
         id: 'context',
-        title: 'Toggle Mastodon Page 🐘 🐘 🐘 Jump Now',
+        title: 'Jump Mastodon Page 🐘 🐘 🐘 Jump Now',
         documentUrlPatterns: [
           '*://*/@*',
           '*://*/users/*',
@@ -1769,7 +1766,7 @@ async function syncContextMenus () {
   } else {
     log('context menu disabled')
   }
-  // todo toggle redirect menu for autojump status, account, copypaste
+  // todo jump redirect menu for autojump status, account, copypaste
 }
 
 async function getPageDetails (url) {
@@ -2246,7 +2243,7 @@ cache['handlers'] = {
 
 chrome.action.onClicked.addListener(async tab => {
   log('.onClicked', tab)
-  if (await getStorageProperty('OnClickedToggle')) {
+  if (await getStorageProperty('OnClickedJump')) {
     log('.onClicked', 'action enabled')
     onClicked(tab)
   } else {
@@ -2257,7 +2254,7 @@ chrome.action.onClicked.addListener(async tab => {
 chrome.commands.onCommand.addListener(async command => {
   if (await getStorageProperty('Shortcuts')) {
     log('.onCommand', 'command enabled')
-    if (command === 'toggle') {
+    if (command === 'jump') {
       log('.onCommand', command)
     } else {
       log('.onCommand', 'Unknown command', command)
@@ -2276,7 +2273,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (
     info.menuItemId == 'context' &&
-    (await getStorageProperty('ContextMenuToggle'))
+    (await getStorageProperty('ContextMenuJump'))
   ) {
     await onClicked(tab)
   }
@@ -2322,9 +2319,12 @@ log('done')
 // separate 'manualy onclicked'list that disables
 // autoredirect for those urls, maybe last 10 or so
 
-// todo: context menu for toggle autoredirect
+// todo: context menu for jump autoredirect
 
 // TODO allow jump back from this??????
 //   <!-- https://hub.libranet.de/channel/la_teje8685?mid=b64.aHR0cHM6Ly9odWIubGlicmFuZXQuZGUvaXRlbS9kNTM4NzZlOS01Y2I0LTRjMjQtOTY5OS1kOTE5NjRjZmU2NTk -->
 
 // TODO current method of window.open seems to erase 'back'history. Is there a way to fix this??????
+
+// TODO allow fediact reply to work
+// todo confirm fediact follow no-conflict
