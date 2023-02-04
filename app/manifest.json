@@ -4,7 +4,6 @@
   "name": "Mastodon Friend Check",
   "description": "This extension shows 'Following' if you've already followed a remote Mastodon web profile.",
   "homepage_url": "https://src.developing.today/MastodonFriendCheck",
-  "update_url": "https://clients2.google.com/service/update2/crx",
   "permissions": ["activeTab", "alarms", "scripting", "storage", "contextMenus"],
   "optional_host_permissions": ["https://*/*"],
   "action": {

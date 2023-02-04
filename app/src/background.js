@@ -1,11 +1,89 @@
-let cache = { counter: 0, ports: {}, handlers: {}, lastUrls: [] }
+let cache = { counter: 0, handlers: {}, ports: {}, lastUrls: [] }
+
+export function isDebug () {
+  return !('update_url' in chrome.runtime.getManifest())
+}
+let isDebugMode = isDebug()
+
+export function normalizeLine (line) {
+  let cleanLine = line.replace(/^\s+at\s+/, '') // remove "at" and surrounding whitespace
+
+  let functionName = cleanLine.split(' ')[0]
+  let [file, linePosition, columnPosition] = cleanLine.split(':').slice(1)
+
+  file = (file || '').split('/').slice(-1)[0]
+  linePosition = parseInt((linePosition || '').replace(/\D/g, '')) // remove non-digits
+  columnPosition = parseInt((columnPosition || '').replace(/\D/g, '')) // remove non-digits
+
+  let position = linePosition + ':' + columnPosition
+
+  return {
+    function: functionName,
+    file,
+    line: linePosition,
+    column: columnPosition,
+    position,
+    lastUrl: cache.lastUrls.slice(-1)[0]
+  }
+}
+
+export function logWithLevel (level, ...args) {
+  if (isDebugMode) {
+    //See https://stackoverflow.com/a/27074218/470749
+    var e = new Error()
+    if (!e.stack) {
+      try {
+        // IE requires the Error to actually be thrown or else the
+        // Error's 'stack'property is undefined.
+        throw e
+      } catch (e) {
+        if (!e.stack) {
+          //return 0; // IE < 10, likely
+        }
+      }
+    }
+    var stack = e.stack.toString().split(/\r\n|\n/)
+
+    stack.shift() // "Exception"
+    stack.shift() // "logWithLevel"
+    stack.shift() // "log"
+
+    stack = stack.map(normalizeLine)
+
+    let metadata = { level, stack, ...stack[0] }
+    let caller =
+      metadata.function.indexOf('/') === -1 ? metadata.function : metadata.file
+    Object.assign(metadata, { args })
+    let short = { '|': metadata }
+    short[caller] = metadata.line
+    console.log(short, ...args)
+  }
+}
+
+export function log (...args) {
+  logWithLevel('LOG', ...args)
+}
+
+export function error (...args) {
+  logWithLevel('ERROR', ...args)
+}
+
+export function getUrlOrNull (url) {
+  try {
+    log('url', { url })
+    return new URL(url)
+  } catch (e) {
+    log('null', { url, e })
+    return null
+  }
+}
 
 export function versionWhichSignifiesFirstRunIsNeeded () {
   return '0.1.0'
 }
 
 export function get (object, property, settings) {
-  // console.log("get", { object, property, settings });
+  // log("get", { object, property, settings });
   let defaultValue = settings ? get(settings, 'default') : null
 
   let resultCondition =
@@ -17,7 +95,7 @@ export function get (object, property, settings) {
     object[property] !== null
   let result = resultCondition ? object[property] : defaultValue
 
-  // console.log("get", { resultCondition, defaultValue, result });
+  // log("get", { resultCondition, defaultValue, result });
   return result
 }
 
@@ -35,7 +113,7 @@ export async function getCurrentTab () {
     lastFocusedWindow: true
   }
   let [tab] = await chrome.tabs.query(queryOptions)
-  console.log('currentTab', tab)
+  log(tab)
   // todo:
   // if (!tab) {
   //   request window location through content script
@@ -76,7 +154,7 @@ export function syncCacheWithStorage (keys) {
 
   cache['lastSyncFull'] = new Date()
   // cache.counter++;
-  console.log('syncCacheWithStorage', cache)
+  log(cache)
 
   return cache
 }
@@ -109,17 +187,17 @@ export async function getStorageProperty (name) {
     name = name[0]
   }
   let result = await getStorage(name)
-  console.log('getStorageProperty', { name, result })
+  log({ name, result })
   return result[name]
 }
 
 export function newTab (url, settings) {
-  console.log('newTab:', { url })
+  log(':', { url })
   chrome.tabs.create({ url: url })
 }
 
 export function updateTab (url, settings) {
-  console.log('updateTab: ', { url, settings })
+  log(': ', { url, settings })
   let tabId = get(settings, 'tabId')
   //  || (get(settings, "tab").id || null;
   if (!tabId) {
@@ -132,11 +210,11 @@ export function updateTab (url, settings) {
     tabId = null
   }
   chrome.tabs.update(tabId, { url })
-  console.log('updateTab: ', { tabId, url })
+  log(': ', { tabId, url })
 }
 
 export async function sendUrlToTab (url, settings) {
-  console.log('sendUrlToTab', { url, settings })
+  log({ url, settings })
   if (url) {
     if (
       get(settings, 'OpenInNewTab', {
@@ -169,17 +247,17 @@ export async function setStorage (object, settings) {
   Object.assign(cache, object)
   cache.lastSyncPartial = new Date()
   // cache.counter++;
-  console.log('setStorage', cache)
+  log(cache)
 
   if (get(settings, 'local')) {
-    console.log('setStorage local', object)
+    log('local', object)
     let result = await chrome.storage.local.set(object)
-    console.log('setStorage local result', result)
+    log('local result', result)
     return object
   } else {
-    console.log('setStorage sync', object)
+    log('sync', object)
     let result = await chrome.storage.sync.set(object)
-    console.log('setStorage sync result', result)
+    log('sync result', result)
     return object
   }
 }
@@ -218,7 +296,7 @@ export function makeHttps (url) {
 
 export async function getInstance (settings) {
   let storage = await getStorage(['Instance', 'InstanceHttps', 'InstanceClean'])
-  console.log('getInstance', { settings, storage })
+  log({ settings, storage })
 
   if (get(settings, 'clean')) {
     return storage.InstanceClean
@@ -235,7 +313,7 @@ export async function search (query, settings) {
   if (!instance || !query) {
     return
   }
-  let url = new URL(instance + 'api/v2/search')
+  let url = getUrlOrNull(instance + 'api/v2/search')
   url.searchParams.append('q', query)
   url.searchParams.append('resolve', true)
   url.searchParams.append('limit', limit)
@@ -252,16 +330,16 @@ export async function setCode (url, settings) {
   let codeSplit = url.split('?')
   let instance = await getInstance()
 
-  console.log('setCode', { url, codeSplit, instance, settings })
+  log({ url, codeSplit, instance, settings })
   if (instance + getCodeRedirectPath() == codeSplit[0]) {
-    console.log('setCode', 'match', { url, codeSplit, instance, settings })
+    log('match', { url, codeSplit, instance, settings })
     updateTab(instance, settings)
     let code = codeSplit[1].split('=')[1]
-    console.log('setCode', 'match', { code })
+    log('match', { code })
     await setStorageWithProperty('code', code)
     return code
   } else {
-    console.log('setCode', 'no match', { url, codeSplit, instance, settings })
+    log('no match', { url, codeSplit, instance, settings })
     return
   }
 }
@@ -311,7 +389,7 @@ export function makeMastodonUrl (
   url.push(status)
   url.push(subpath) // TODO: test this
   url = url.filter(element => element)
-  console.log('makeMastodonUrl', {
+  log({
     url,
     local,
     username,
@@ -329,45 +407,45 @@ export function makeMastodonUrl (
       ? []
       : [{ instance: remote || local, id: status, type: 'built' }]
   }
-  console.log('makeMastodonUrl', 'result', { result, settings, url })
+  log('result', { result, settings, url })
 
   if (settings) {
-    console.log('makeMastodonUrl', 'settings', { result, settings, url })
+    log('settings', { result, settings, url })
 
     if (settings.accounts) {
-      console.log('makeMastodonUrl', 'settings.accounts', {
+      log('settings.accounts', {
         result,
         settings,
         url
       })
 
       if (Array.isArray(settings.accounts)) {
-        console.log('makeMastodonUrl', 'settings.accounts.isArray', {
+        log('settings.accounts.isArray', {
           result,
           settings,
           url
         })
         settings.accounts.forEach(account => {
-          console.log('makeMastodonUrl', 'settings.accounts.forEach', {
+          log('settings.accounts.forEach', {
             result,
             settings,
             url
           })
           result.accounts.push(account)
-          console.log('makeMastodonUrl', 'settings.accounts.forEach result', {
+          log('settings.accounts.forEach result', {
             result,
             settings,
             url
           })
         })
       } else {
-        console.log('makeMastodonUrl', 'settings.accounts.push', {
+        log('settings.accounts.push', {
           result,
           settings,
           url
         })
         result.accounts.push(settings.accounts)
-        console.log('makeMastodonUrl', 'settings.accounts.push result', {
+        log('settings.accounts.push result', {
           result,
           settings,
           url
@@ -377,7 +455,7 @@ export function makeMastodonUrl (
     }
 
     if (settings.statuses) {
-      console.log('makeMastodonUrl', 'settings.statuses', {
+      log('settings.statuses', {
         result,
         settings,
         url
@@ -387,7 +465,7 @@ export function makeMastodonUrl (
         settings.statuses.forEach(status => {
           result.statuses.push(status)
         })
-        console.log('makeMastodonUrl', 'settings.statuses isArray result', {
+        log('settings.statuses isArray result', {
           result,
           settings,
           url
@@ -395,23 +473,23 @@ export function makeMastodonUrl (
       } else {
         result.statuses.push(settings.statuses)
       }
-      console.log('makeMastodonUrl', 'settings.statuses result', {
+      log('settings.statuses result', {
         result,
         settings,
         url
       })
       delete settings.statuses
     }
-    console.log('makeMastodonUrl', 'settings result', { result, settings, url })
+    log('settings result', { result, settings, url })
 
     Object.assign(result, settings)
-    console.log('makeMastodonUrl', 'settings Object.assign result', {
+    log('settings Object.assign result', {
       result,
       settings,
       url
     })
   }
-  console.log('makeMastodonUrl', 'result', { result, settings, url })
+  log('result', { result, settings, url })
 
   return mastodonUrlResult(url.join('/'), result)
 }
@@ -444,10 +522,10 @@ export function changeMastodonUriToUrl (url) {
   // misskey where status is a string
   //   /notes/<status>
 
-  // don't actually define 'this is from here' or whatever,
+  // don't actually define 'this is from here'or whatever,
   // that specific stuff probably can't be known just from url
 
-  // just define 'if it has /users/' get <user> from the next part
+  // just define 'if it has /users/'get <user> from the next part
   // if /i/web/profile/ get <user> from the next part
   // if /i/web/post/ get <status> from the next part
 
@@ -474,13 +552,13 @@ export async function statuses (id, settings) {
     return
   }
 
-  let url = new URL(instance + 'api/v1/statuses/' + id)
+  let url = getUrlOrNull(instance + 'api/v1/statuses/' + id)
   return fetch(url).then(result => result.json())
 }
 
 export async function getLocality (url, settings) {
   let explodedUrl = explodeUrlNoHandler(url)
-  console.log('getLocality', explodedUrl)
+  log(explodedUrl)
   let handle = explodedUrl[1]
   // TODO: handle double remote in the options and autoRedirect.
   // can either go to local or remote when double remote.
@@ -498,7 +576,7 @@ export async function getLocality (url, settings) {
     default: await getInstance({ clean: true })
   })
   let urlClean = cleanDomain(url)
-  console.log('getLocality', {
+  log({
     url,
     settings,
     explodedUrl,
@@ -509,13 +587,13 @@ export async function getLocality (url, settings) {
   })
 
   if (doubleRemote) {
-    console.log('doubleRemote')
+    log('doubleRemote')
     return 'remote-remote'
   } else if (urlClean == instanceClean) {
-    console.log('local')
+    log('local')
     return 'local'
   } else {
-    console.log('remote')
+    log('remote')
     return 'remote'
   }
 }
@@ -545,22 +623,24 @@ export async function getWebfinger (instance, username) {
   //   ]
   // }
 
-  let webfingerUrl = new URL('https://' + instance + '/.well-known/webfinger')
+  let webfingerUrl = getUrlOrNull(
+    'https://' + instance + '/.well-known/webfinger'
+  )
   webfingerUrl.searchParams.set('resource', 'acct:' + username + '@' + instance)
 
   let webfinger = await fetch(webfingerUrl).then(result => {
-    console.log('getWebfinger', { webfingerUrl, result })
+    log({ webfingerUrl, result })
     return result.json()
   })
-  console.log('getWebfinger', { webfingerUrl, webfinger })
+  log({ webfingerUrl, webfinger })
   return webfinger
 }
 
 export function getProfileFromWebfinger (webfinger) {
-  console.log('getProfileFromWebfinger', { webfinger })
+  log({ webfinger })
 
   let profileUrls = get(webfinger, 'links')
-  console.log('getProfileFromWebfinger', { webfinger, profileUrls })
+  log({ webfinger, profileUrls })
 
   if (!profileUrls) {
     return null
@@ -576,16 +656,16 @@ export function getProfileFromWebfinger (webfinger) {
 
   profileUrls = profileUrls.map(url => url.href)
 
-  console.log('getProfileFromWebfinger', { webfinger, profileUrls })
+  log({ webfinger, profileUrls })
   let profileUrl = profileUrls.length > 0 ? profileUrls[0] : null
-  console.log('getProfileFromWebfinger', { webfinger, profileUrls, profileUrl })
+  log({ webfinger, profileUrls, profileUrl })
 
   return profileUrl
 }
 
 export async function getWebfingerProfile (instance, username) {
   let webfinger = await getWebfinger(instance, username)
-  console.log('getWebfingerProfile', { webfinger })
+  log({ webfinger })
   return getProfileFromWebfinger(webfinger)
 }
 
@@ -601,20 +681,20 @@ export function getAccountFromWebfinger (webfinger) {
 
 export async function getWebfingerAccount (instance, username) {
   let webfinger = await getWebfinger(instance, username)
-  console.log('getWebfingerAccount', { webfinger })
+  log({ webfinger })
 
   let account = getAccountFromWebfinger(webfinger).split('@')
-  console.log('getWebfingerAccount', { webfinger, account })
+  log({ webfinger, account })
 
   if (account.length == 1) {
-    console.log('getWebfingerAccount', 'account.length = 1', {
+    log('account.length = 1', {
       webfinger,
       account,
       instance
     })
     account = [account[0], instance]
   } else {
-    console.log('getWebfingerAccount', 'account.length != 1', {
+    log('account.length != 1', {
       webfinger,
       account,
       instance
@@ -647,7 +727,7 @@ export async function toggleMastodonUrl (url, settings) {
   //   4 remote to remote mastodon.social to infosec.exchange
   //     - "show original" on remote, follow 2 if possible
 
-  console.log('toggleMastodonUrl', url)
+  log(url)
 
   let urlExploded = explodeUrlNoHandler(
     changeMastodonUriToUrl((url || '').toString())
@@ -664,7 +744,7 @@ export async function toggleMastodonUrl (url, settings) {
     settings.statuses = []
   }
 
-  console.log('toggleMastodonUrl', 'explodeUrl', {
+  log('explodeUrl', {
     hostDomain,
     handle,
     id,
@@ -676,7 +756,7 @@ export async function toggleMastodonUrl (url, settings) {
     let [username, remoteDomain] = handle.split('@').slice(1)
     let instance = await getInstance()
     let hostDomainUrl = makeHttps(hostDomain)
-    console.log('toggleMastodonUrl', 'domain comparison', {
+    log('domain comparison', {
       username,
       remoteDomain,
       instance,
@@ -684,7 +764,7 @@ export async function toggleMastodonUrl (url, settings) {
     })
 
     if (get(settings, 'locality') == 'remote-remote') {
-      console.log('toggleMastodonUrl', 'remote-remote')
+      log('remote-remote')
       let profileUrl = await getWebfingerProfile(remoteDomain, username)
       let [profileUsername, profileDomain] = profileUrl
         .split('/')
@@ -716,21 +796,21 @@ export async function toggleMastodonUrl (url, settings) {
           searchResults.statuses &&
           searchResults.statuses.length > 0
         ) {
-          console.log('toggleMastodonUrl', 'remote-remote', 'status', {
+          log('remote-remote', 'status', {
             url,
             searchResults
           })
           let searchResultId = searchResults.statuses[0].id
 
           let statusResult = await statuses(searchResultId)
-          console.log('toggleMastodonUrl', 'remote-remote', 'status', {
+          log('remote-remote', 'status', {
             url,
             statusResult,
             searchResults
           })
 
           let statusUrl = await get(statusResult, 'url')
-          console.log('toggleMastodonUrl', 'remote-remote', 'status', {
+          log('remote-remote', 'status', {
             url,
             statusUrl,
             statusResult,
@@ -738,17 +818,16 @@ export async function toggleMastodonUrl (url, settings) {
           })
 
           if (statusUrl) {
-            console.log(
-              'toggleMastodonUrl',
-              'remote-remote',
-              'status',
-              'redirect',
-              { url, statusUrl, statusResult, searchResults }
-            )
+            log('remote-remote', 'status', 'redirect', {
+              url,
+              statusUrl,
+              statusResult,
+              searchResults
+            })
 
             return mastodonUrlResult(statusUrl, settings)
           } else {
-            console.log(
+            log(
               'toggleMastodonUrl',
               'remote-remote',
               'status',
@@ -757,7 +836,7 @@ export async function toggleMastodonUrl (url, settings) {
             )
           }
         } else {
-          console.log('toggleMastodonUrl', 'remote-remote', 'no status', {
+          log('remote-remote', 'no status', {
             url
           })
         }
@@ -788,21 +867,17 @@ export async function toggleMastodonUrl (url, settings) {
         settings.accounts = settings.accounts.concat(accountsArray)
 
         if (id) {
-          console.log('toggleMastodonUrl', 'local to remote', 'status')
+          log('local to remote', 'status')
           let results = await statuses(id)
-          console.log(
-            'toggleMastodonUrl',
-            'local to remote',
-            'status',
-            'results',
-            { results }
-          )
+          log('local to remote', 'status', 'results', {
+            results
+          })
           let statusUrl = get(results, 'url')
 
           if (!statusUrl) {
             return
           }
-          let statusUrlObject = new URL(statusUrl)
+          let statusUrlObject = getUrlOrNull(statusUrl)
           let statusesArray = [
             { instance, id, type: 'local' },
             {
@@ -815,41 +890,39 @@ export async function toggleMastodonUrl (url, settings) {
             }
           ]
           settings.statuses = statusesArray
-          console.log(
-            'toggleMastodonUrl',
-            'local to remote',
-            'status',
-            'result',
-            { statusUrl, statusesArray, settings }
-          )
+          log('local to remote', 'status', 'result', {
+            statusUrl,
+            statusesArray,
+            settings
+          })
 
           if (subpath) {
             statusUrl += '/' + subpath
           }
-          console.log('toggleMastodonUrl', 'local to remote', 'status', 'url', {
+          log('local to remote', 'status', 'url', {
             statusUrl,
             settings
           })
           return mastodonUrlResult(statusUrl, settings)
         } else {
-          console.log('toggleMastodonUrl', 'local to remote', 'account', {
+          log('local to remote', 'account', {
             profileUrl,
             settings
           })
           return mastodonUrlResult(profileUrl, settings)
         }
       } else {
-        console.log('toggleMastodonUrl', 'local to local') // ???
+        log('local to local') // ???
         // return makeMastodonUrl(
         // instance, username, null, status, subpath);
         return
       }
     } else {
-      console.log('toggleMastodonUrl', 'remote to local')
+      log('remote to local')
 
       let domain = remoteDomain || hostDomain
       let webfinger = await getWebfinger(domain, username)
-      console.log('toggleMastodonUrl', {
+      log({
         webfinger,
         domain,
         username,
@@ -863,22 +936,22 @@ export async function toggleMastodonUrl (url, settings) {
             .split('/')
             .slice(-1)[0]
             .split('@')[0]
-      let profileDomain = new URL(profileUrl).host
-      console.log('toggleMastodonUrl', 'profile', {
+      let profileDomain = getUrlOrNull(profileUrl).host
+      log('profile', {
         profileUrl,
         profileUsername,
         profileDomain
       })
 
       let webAccount = getAccountFromWebfinger(webfinger).split('@')
-      console.log('toggleMastodonUrl', 'webAccount', { webAccount })
+      log('webAccount', { webAccount })
 
       if (webAccount.length == 1) {
         webAccount = [webAccount[0], domain]
       }
 
       let [webUsername, webDomain] = webAccount
-      console.log('toggleMastodonUrl', {
+      log({
         webAccount,
         webUsername,
         webDomain,
@@ -893,7 +966,7 @@ export async function toggleMastodonUrl (url, settings) {
           type: 'webfinger-account'
         }
       )
-      console.log('toggleMastodonUrl', 'accounts', {
+      log('accounts', {
         profileUrl,
         profileUsername,
         profileDomain,
@@ -904,7 +977,7 @@ export async function toggleMastodonUrl (url, settings) {
       })
 
       if (id) {
-        console.log('toggleMastodonUrl', 'remote to local', 'status', {
+        log('remote to local', 'status', {
           id,
           subpath,
           settings
@@ -922,18 +995,15 @@ export async function toggleMastodonUrl (url, settings) {
           result = results.statuses[0]
 
           if (result) {
-            console.log(
-              'toggleMastodonUrl',
-              'remote to local',
-              'status',
-              'result',
-              { result, settings }
-            )
+            log('remote to local', 'status', 'result', {
+              result,
+              settings
+            })
             settings.statuses.push(
               { instance: hostDomain, id, type: 'url-host' },
               { instance: instance, id: result.id, type: 'local' }
             )
-            console.log('toggleMastodonUrl', 'statuses', { result, settings })
+            log('statuses', { result, settings })
 
             // todo: probably a bug related to
             // webfinger and activitypub here
@@ -945,21 +1015,21 @@ export async function toggleMastodonUrl (url, settings) {
               subpath,
               settings
             )
-            console.log('toggleMastodonUrl', 'use local', {
+            log('use local', {
               localUrl,
               settings
             })
             return localUrl
           } else {
-            console.log('toggleMastodonUrl', 'no result', { result, results })
+            log('no result', { result, results })
             // TODO: if all-url, try to find status on remote
           }
         } else {
-          console.log('toggleMastodonUrl', 'no results', { results })
+          log('no results', { results })
           // TODO: if all-url, try to find status on remote
         }
       } else {
-        console.log('toggleMastodonUrl', 'remote to local', 'account')
+        log('remote to local', 'account')
         // TODO webfinger
         let localUrl = makeMastodonUrl(
           instance,
@@ -969,7 +1039,7 @@ export async function toggleMastodonUrl (url, settings) {
           subpath,
           settings
         )
-        console.log('toggleMastodonUrl', 'use local', { localUrl, settings })
+        log('use local', { localUrl, settings })
 
         return localUrl
       }
@@ -992,7 +1062,7 @@ export async function getToken () {
 }
 
 export async function setToken (settings) {
-  let url = new URL(
+  let url = getUrlOrNull(
     get(settings, 'url', { default: (await getInstance()) + 'oauth/token' })
   )
   let code = get(settings, 'code', { default: await getCode() })
@@ -1015,7 +1085,7 @@ export async function setToken (settings) {
   formData.append('redirect_uri', redirect_uri)
   formData.append('scope', scope)
 
-  console.log('setToken', {
+  log({
     url,
     code,
     client_id,
@@ -1027,26 +1097,26 @@ export async function setToken (settings) {
   let result = await fetch(url, { method: 'POST', body: formData })
     .then(result => result.json())
     .then(result => {
-      console.log('setToken', result)
+      log(result)
       return result
     })
     .then(setStorage)
     .then(result => result.access_token)
 
-  console.log('setToken', 'result', result)
+  log('result', result)
 
   return result
 }
 
 export async function verify (settings) {
-  let url = new URL(
+  let url = getUrlOrNull(
     get(settings, 'url', {
       default: (await getInstance()) + 'api/v1/apps/verify_credentials'
     })
   )
   let token = get(settings, 'token', { default: await getToken() })
 
-  console.log('verify', { url, token })
+  log({ url, token })
 
   let result = await fetch(url, {
     method: 'GET',
@@ -1055,16 +1125,18 @@ export async function verify (settings) {
     }
   }).then(response => response.json())
 
-  console.log('verify', 'result', result, { url, token })
+  log('result', result, { url, token })
 
   return result
 }
 
 export async function follow (id) {
-  let url = new URL((await getInstance()) + 'api/v1/accounts/' + id + '/follow')
+  let url = getUrlOrNull(
+    (await getInstance()) + 'api/v1/accounts/' + id + '/follow'
+  )
 
   let token = await getToken()
-  console.log('follow', { id, url, token })
+  log({ id, url, token })
 
   let result = await fetch(url, {
     method: 'POST',
@@ -1072,7 +1144,7 @@ export async function follow (id) {
       Authorization: 'Bearer ' + token
     }
   }).then(response => response.json())
-  console.log('follow', 'result', result, { id, url, token })
+  log('result', result, { id, url, token })
 
   return result
 }
@@ -1081,31 +1153,34 @@ export async function toggleMastodonTab (tab, settings) {
   cache.lastUrls = cache.lastUrls || []
   cache.lastUrls.push({ urls: [tab.url], timestamp: Date.now() })
   cache.lastUrl = tab.url
+  cache.lastTab = tab
+  cache.lastTabId = tab.id
+  cache.lastTabUpdated = Date.now()
 
   return toggleMastodonUrl(tab.url, settings).then(async result => {
     if (!result) {
-      console.log('toggleMastodonTab', 'no result')
+      log('no result')
       return
     }
 
     if (get(settings, 'locality') == 'remote-remote') {
-      console.log('toggleMastodonTab', 'double remote', {
+      log('double remote', {
         result,
         tab,
         settings
       })
 
-      let resultUrl = new URL(get(result, 'url'))
-      let instance = new URL(await getInstance())
+      let resultUrl = getUrlOrNull(get(result, 'url'))
+      let instance = getUrlOrNull(await getInstance())
 
       if (resultUrl.host != instance.host) {
-        console.log('toggleMastodonTab', 'double remote', 'remote')
+        log('double remote', 'remote')
         delete settings.locality
         result = await toggleMastodonUrl(result.url, settings)
       } else {
-        console.log('toggleMastodonTab', 'double remote', 'local')
+        log('double remote', 'local')
       }
-      console.log('toggleMastodonTab', 'double remote result', {
+      log('double remote result', {
         result,
         tab,
         settings
@@ -1113,7 +1188,7 @@ export async function toggleMastodonTab (tab, settings) {
     }
 
     if (!result) {
-      console.log('toggleMastodonTab', 'no result')
+      log('no result')
       return
     }
 
@@ -1126,7 +1201,7 @@ export async function toggleMastodonTab (tab, settings) {
 
     let url = get(result, 'url')
     let status = get(settings, 'status')
-    console.log('toggleMastodonUrl', 'pending jump', url)
+    log('pending jump', url)
 
     if (
       url &&
@@ -1135,17 +1210,13 @@ export async function toggleMastodonTab (tab, settings) {
       (!cache.lastUrl || url != cache.lastUrl) &&
       ((status && status.startsWith('onClicked')) ||
         cache.lastUrls.length < 2 ||
-          cache.lastUrls.slice(-2, -1)[0].urls.filter(u => u.url == url)
-            .length == 0)
+        cache.lastUrls.slice(-2, -1)[0].urls.filter(u => u.url == url).length ==
+          0)
     ) {
-      console.log('toggleMastodonTab', 'jump', { url, settings })
+      log('jump', { url, settings })
 
       if (!get(cache, 'lastUrls') || !Array.isArray(cache.lastUrls)) {
-        console.log(
-          'toggleMastodonTab',
-          'lastUrls was not an array',
-          cache.lastUrls
-        )
+        log('lastUrls was not an array', cache.lastUrls)
         cache.lastUrls = []
       }
 
@@ -1160,7 +1231,7 @@ export async function toggleMastodonTab (tab, settings) {
       })
       cache.lastUrl = url
 
-      console.log('toggleMastodonTab', 'jump', {
+      log('jump', {
         url,
         settings,
         cache,
@@ -1170,8 +1241,8 @@ export async function toggleMastodonTab (tab, settings) {
 
       return sendUrlToTab(url, settings)
     } else {
-      console.log('toggleMastodonTab: no jump', { url, settings })
-      console.log('toggleMastodonTab', 'jump conditions', {
+      log(': no jump', { url, settings })
+      log('jump conditions', {
         url,
         tabUrl: tab.url,
         pendingUrl: tab.pendingUrl,
@@ -1199,10 +1270,10 @@ function isString (x) {
 
 export async function onInstalled (installInfo) {
   if (isString(installInfo)) {
-    console.log('onInstalled', 'installInfo was a string', { installInfo })
+    log('installInfo was a string', { installInfo })
     installInfo = { reason: installInfo }
   }
-  console.log('onInstalled', { installInfo })
+  log({ installInfo })
 
   if (
     ![
@@ -1212,18 +1283,18 @@ export async function onInstalled (installInfo) {
       'browser_update'
     ].includes(installInfo.reason)
   ) {
-    console.log('onInstalled', 'syncCacheWithStorage', { installInfo })
+    log('syncCacheWithStorage', { installInfo })
     await syncCacheWithStorage()
 
     let storageVersion = await getStorageVersion()
 
     if (!storageVersion) {
-      console.log('onInstalled', 'setStorageVersion', { installInfo })
+      log('setStorageVersion', { installInfo })
       storageVersion = versionWhichSignifiesFirstRunIsNeeded()
     }
     let storageMajorVersion = storageVersion.split('.')[0]
     let currentMajorVersion = getCurrentVersion().split('.')[0]
-    console.log('onInstalled', 'storageVersion', {
+    log('storageVersion', {
       storageVersion,
       installInfo,
       currentMajorVersion,
@@ -1235,23 +1306,23 @@ export async function onInstalled (installInfo) {
       parseInt(currentMajorVersion, 10) > parseInt(storageMajorVersion, 10) ||
       installInfo.reason == 'onClicked,noInstance'
     ) {
-      console.log('onInstalled', 'openOptions', {
+      log('openOptions', {
         installInfo,
         reason: installInfo.reason
       })
 
       if (chrome.runtime.openOptionsPage) {
-        console.log('onInstalled', 'openOptionsPage')
+        log('openOptionsPage')
         chrome.runtime.openOptionsPage()
       } else {
-        console.log('onInstalled', 'newTab')
+        log('newTab')
         newTab(getChromeUrl('options.html'))
       }
     } else {
-      console.log('onInstalled', 'no major version change')
+      log('no major version change')
     }
   } else {
-    console.log('onInstalled', 'no action', {
+    log('no action', {
       installInfo,
       reason: installInfo.reason
     })
@@ -1265,20 +1336,20 @@ function filterObject (obj, callback) {
 }
 
 export async function syncLocalWithFollowsCsv () {
-  console.log('syncLocalWithFollowsCsv')
+  log()
 
   let instance = await getInstance()
-  console.log('syncLocalWithFollowsCsv', instance)
-  console.log('syncLocalWithFollowsCsv', cache)
-  console.log('syncLocalWithFollowsCsv', await getStorage())
+  log(instance)
+  log(cache)
+  log(await getStorage())
 
   if (instance) {
-    console.log('syncLocalWithFollowsCsv', instance)
+    log(instance)
 
     return fetch(instance + 'settings/exports/follows.csv')
       .then(response => response.text())
       .then(text => {
-        // console.log("syncLocalWithFollowsCsv text", text);
+        // log({ text });
         let content = {}
         let lines = text.split('\n')
 
@@ -1294,18 +1365,18 @@ export async function syncLocalWithFollowsCsv () {
 
         let timestamp = new Date()
         let follows = { timestamp, content }
-        console.log('syncLocalWithFollowsCsv content', follows)
+        log('content', follows)
         cache.follows = follows
 
         return setStorage({ follows }, { local: true })
       })
   } else {
-    console.log('syncLocalWithFollowsCsv', 'no instance')
+    log('no instance')
   }
 }
 
 export async function onChanged (changes, namespace) {
-  console.log('onChanged', {
+  log({
     changes,
     namespace,
     cache,
@@ -1328,14 +1399,14 @@ export async function onChanged (changes, namespace) {
   // }
   // cache[namespace]["lastSyncPartial"] = new Date();
   // cache["lastSyncPartial"] = new Date();
-  console.log('onChanged', { cache })
+  log({ cache })
 }
 
 export async function onClicked (tab) {
   let version = await getStorageVersion()
 
   let instance = await getInstance({ noHttps: true })
-  console.log('onClicked', {
+  log({
     version,
     tab,
     versionWhichSignifiesFirstRunIsNeeded: versionWhichSignifiesFirstRunIsNeeded(),
@@ -1345,63 +1416,63 @@ export async function onClicked (tab) {
   })
 
   if (version === versionWhichSignifiesFirstRunIsNeeded()) {
-    console.log('onClicked', 'versionWhichSignifiesFirstRunIsNeeded')
+    log('versionWhichSignifiesFirstRunIsNeeded')
     return onInstalled({ reason: 'onClicked' })
   }
 
   if (!instance) {
-    console.log('onClicked', 'no instance')
+    log('no instance')
     return onInstalled({ reason: 'onClicked,noInstance' })
   }
 
   if (await getStorageProperty('OnClickedToggle')) {
     return await toggleMastodonTab(tab, { status: 'onClicked' })
   } else {
-    console.log('onClicked', 'OnClickedToggle disabled')
+    log('OnClickedToggle disabled')
   }
 }
 
 export async function onUpdated (tabId, changeInfo, tab) {
   if (['loading', 'onUpdated', 'onMessage'].includes(changeInfo.status)) {
-    console.log('onUpdated', tabId, changeInfo, tab)
+    log(tabId, changeInfo, tab)
 
     if (!tab) {
-      console.log('onUpdated', 'no tab')
+      log('no tab')
       return
     }
 
     if (!tab.url) {
-      console.log('onUpdated', 'no tab.url')
+      log('no tab.url')
 
       if (tab.pendingUrl) {
-        console.log('onUpdated', 'tab has pendingUrl', {
+        log('tab has pendingUrl', {
           tabId,
           changeInfo,
           tab
         })
         tab.url = tab.pendingUrl
       } else if (tab.currentTab) {
-        console.log('onUpdated', 'tab is currentTab', {
+        log('tab is currentTab', {
           tabId,
           changeInfo,
           tab
         })
         return
       } else {
-        console.log('onUpdated', 'tab is not populated', {
+        log('tab is not populated', {
           tabId,
           changeInfo,
           tab
         })
 
         return getCurrentTab().then(result => {
-          console.log('onUpdated', 'currentTab', { tabId, changeInfo, tab })
+          log('currentTab', { tabId, changeInfo, tab })
 
           if (result && (result.url || result.pendingUrl)) {
             Object.assign(result, { currentTab: true })
             return onUpdated(tabId, changeInfo, result)
           } else {
-            console.log('onUpdated', 'currentTab has no url', {
+            log('currentTab has no url', {
               tabId,
               changeInfo,
               tab
@@ -1413,35 +1484,35 @@ export async function onUpdated (tabId, changeInfo, tab) {
     }
 
     if (!tab.url) {
-      console.log('onUpdated', 'no tab.url')
+      log('no tab.url')
       return
     }
 
     if (tab.url.indexOf('https://') !== 0 && tab.url.indexOf('http://') !== 0) {
-      console.log('onUpdated', 'not http(s)', tab.url)
+      log('not http(s)', tab.url)
       return
     }
 
     if (tab.url.indexOf('chrome://') === 0) {
-      console.log('onUpdated', 'chrome://', tab.url)
+      log('chrome://', tab.url)
       return
     }
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
-      console.log('onUpdated', 'code redirect', tab.url)
+      log('code redirect', tab.url)
       let code = await setCode(tab.url, { tabId, changeInfo, tab })
       let token = await setToken({ code, tabId, changeInfo, tab })
       let verifyResults = await verify({ token, tabId, changeInfo, tab })
-      console.log('onUpdated', 'code redirect', { code, token, verify })
+      log('code redirect', { code, token, verify })
       return
     }
 
     if (tab.url.indexOf('@') === -1) {
-      console.log('onUpdated', 'no @', tab.url)
+      log('no @', tab.url)
       return
     }
 
-    console.log('onUpdated', 'init', tab.url)
+    log('init', tab.url)
 
     let timeBetweenUpdates = 1200 * 1
     let timestamp = new Date()
@@ -1451,7 +1522,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
     }
 
     if (get(cache, 'lastTabUpdated') > timestamp - timeBetweenUpdates) {
-      console.log('onUpdated', 'lastUpdated too new', {
+      log('lastUpdated too new', {
         cache: cache.lastTabUpdated,
         timestamp,
         timeBetweenUpdates
@@ -1462,14 +1533,14 @@ export async function onUpdated (tabId, changeInfo, tab) {
     let locality = null
     let pageDetails = null
 
-    console.log('onUpdated', 'instance', instance)
+    log('instance', instance)
 
     if (instance) {
       if (tab.url.indexOf(instance) > -1) {
-        console.log('onUpdated', 'url is local', tab.url)
+        log('url is local', tab.url)
 
         if (tab.url.indexOf('@') > -1 && tab.url.split('@').length > 2) {
-          console.log('onUpdated', 'remote user', tab.url)
+          log('remote user', tab.url)
 
           locality = 'local'
 
@@ -1496,7 +1567,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
           let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url))
           pageDetails = await getPageDetails(tab.url)
 
-          console.log('onUpdated', {
+          log({
             locality,
             statusDropdown,
             accountDropdown,
@@ -1511,14 +1582,14 @@ export async function onUpdated (tabId, changeInfo, tab) {
             ((pageDetails.pageType == 'status' && statusDropdownMatches) ||
               (pageDetails.pageType == 'account' && accountDropdownMatches))
           ) {
-            console.log('onUpdated', 'pageType matches', {
+            log('pageType matches', {
               pageDetails,
               statusDropdownMatches,
               accountDropdownMatches,
               locality
             })
           } else {
-            console.log('onUpdated', 'pageType does not match', {
+            log('pageType does not match', {
               pageDetails,
               statusDropdownMatches,
               accountDropdownMatches,
@@ -1528,14 +1599,14 @@ export async function onUpdated (tabId, changeInfo, tab) {
           }
         }
       } else {
-        console.log('onUpdated', 'url is not local', tab.url)
+        log('url is not local', tab.url)
 
         locality = 'remote'
 
         let urlSplit = tab.url.split('@')
 
         if (urlSplit.length > 2) {
-          console.log('onUpdated', 'double remote detected', tab.url)
+          log('double remote detected', tab.url)
           locality = 'remote-remote'
         }
 
@@ -1564,7 +1635,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
         let urlExplode = explodeUrlNoHandler(changeMastodonUriToUrl(tab.url))
         pageDetails = await getPageDetails(tab.url)
 
-        console.log('onUpdated', 'conditions', {
+        log('conditions', {
           locality,
           statusDropdown,
           accountDropdown,
@@ -1579,14 +1650,14 @@ export async function onUpdated (tabId, changeInfo, tab) {
           ((pageDetails.pageType == 'status' && statusDropdownMatches) ||
             (pageDetails.pageType == 'account' && accountDropdownMatches))
         ) {
-          console.log('onUpdated', 'pageType matches', {
+          log('pageType matches', {
             pageDetails,
             statusDropdownMatches,
             accountDropdownMatches,
             locality
           })
         } else {
-          console.log('onUpdated', 'pageType does not match', {
+          log('pageType does not match', {
             pageDetails,
             statusDropdownMatches,
             accountDropdownMatches,
@@ -1597,13 +1668,13 @@ export async function onUpdated (tabId, changeInfo, tab) {
       }
 
       if (!get(cache, 'lastUrls') || !Array.isArray(cache.lastUrls)) {
-        console.log('onUpdated', 'lastUrls was not an array', cache.lastUrls)
+        log('lastUrls was not an array', cache.lastUrls)
         cache.lastUrls = []
       }
 
       if (cache.lastUrls.length > 0) {
         if (tab.url == cache.lastUrl) {
-          console.log('onUpdated', 'lastUrl was same', {
+          log('lastUrl was same', {
             lastUrl: cache.lastUrl,
             tabUrl: tab.url
           })
@@ -1620,7 +1691,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
             lastUrlData.timestamp >
             timestamp - timeBetweenUpdatesForSameUrlAndIsLastUrl
           ) {
-            console.log('onUpdated', 'lastUrl was too new', {
+            log('lastUrl was too new', {
               lastUrlData,
               timestamp,
               timeBetweenUpdatesForSameUrlAndIsLastUrl
@@ -1641,7 +1712,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
             )
           )
         ) {
-          console.log('onUpdated', 'url was too new', {
+          log('url was too new', {
             tab,
             timestamp,
             timeBetweenUpdatesForSameUrl,
@@ -1651,12 +1722,14 @@ export async function onUpdated (tabId, changeInfo, tab) {
           return
         }
       }
-      console.log('onUpdated', 'passed conditions')
+      log('passed conditions')
 
       cache.lastUrls = cache.lastUrls.slice(-9)
       cache.lastUrls.push({ urls: [tab.url], timestamp })
       cache.lastTabId = tabId
       cache.lastTabUpdated = timestamp
+      cache.lastUrl = tab.url
+      cache.lastTab = tab
 
       let settings = changeInfo
       settings.tabId = tabId
@@ -1667,7 +1740,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
       if (pageDetails && pageDetails.pageType) {
         settings.pageType = pageDetails.pageType
       }
-      console.log('onUpdated', 'settings', settings)
+      log('settings', settings)
 
       return toggleMastodonTab(tab, settings)
     }
@@ -1678,7 +1751,7 @@ async function syncContextMenus () {
   await chrome.contextMenus.removeAll()
   // todo use extension checkbox to determine if context menu should be created
   if (await getStorageProperty('ContextMenu')) {
-    console.log('syncContextMenus', 'context menu enabled')
+    log('context menu enabled')
 
     if (await getStorageProperty('ContextMenuJump')) {
       await chrome.contextMenus.create({
@@ -1691,10 +1764,10 @@ async function syncContextMenus () {
         ]
       })
     } else {
-      console.log('syncContextMenus', 'context menu jump disabled')
+      log('context menu jump disabled')
     }
   } else {
-    console.log('syncContextMenus', 'context menu disabled')
+    log('context menu disabled')
   }
   // todo toggle redirect menu for autojump status, account, copypaste
 }
@@ -1714,7 +1787,7 @@ async function getPageDetails (url) {
       pageDetails.status = urlExplode[2]
     }
   } else {
-    console.log('getPageDetails', 'urlExplode was falsey', urlExplode)
+    log('urlExplode was falsey', urlExplode)
   }
 
   return pageDetails
@@ -1723,28 +1796,28 @@ async function getPageDetails (url) {
 async function checkFollows (url, settings) {
   let keys = ['InstanceHttps', 'InstanceClean', 'follows']
   let result = await getStorage(keys)
-  console.log('checkFollows', result.InstanceHttps, result)
+  log(result.InstanceHttps, result)
 
   if (url && result && keys.every(key => key in result)) {
-    url = new URL(url)
+    url = getUrlOrNull(url)
 
     if (url.hostname == result.InstanceClean) {
-      console.log('checkFollows', 'on instance page')
+      log('on instance page')
     } else {
-      console.log('checkFollows', 'not on instance page')
+      log('not on instance page')
 
       let instance = url.hostname.replace(url.protocol + '//', '')
       let path = url.pathname.split('/').filter(item => item !== '')
-      console.log('checkFollows', 'url', url, instance, path)
+      log('url', url, instance, path)
 
       if (path.length > 2) {
-        console.log('checkFollows', 'path too long, not a profile page')
-        console.log('checkFollows', 'path', path)
+        log('path too long, not a profile page')
+        log('path', path)
       } else if (path.length == 0) {
-        console.log('checkFollows', 'path too short, not a profile page')
-        console.log('checkFollows', 'path', path)
+        log('path too short, not a profile page')
+        log('path', path)
       } else {
-        console.log('checkFollows', 'path', path)
+        log('path', path)
       }
 
       let handle = path[0]
@@ -1763,7 +1836,7 @@ async function checkFollows (url, settings) {
 
       let account = username + '@' + instance
 
-      console.log('checkFollows', 'handleSplit', {
+      log('handleSplit', {
         username,
         instance,
         result,
@@ -1771,45 +1844,36 @@ async function checkFollows (url, settings) {
       })
 
       if (account in result.follows.content) {
-        console.log('checkFollows', 'account in follows', account)
+        log('account in follows', account)
         return { url: result.InstanceHttps + '@' + account, following: true }
       } else {
-        console.log(
-          'checkFollows',
-          'account not in follows',
-          account,
-          result.follows
-        )
+        log('account not in follows', account, result.follows)
 
         let webAccount = await getWebfingerAccount(instance, username)
         let [webAccountUsername, webAccountInstance] = webAccount.split('@')
 
         if (webAccount in result.follows.content) {
-          console.log('checkFollows', 'webAccount in follows', webAccount)
+          log('webAccount in follows', webAccount)
           return {
             url: result.InstanceHttps + '@' + webAccount,
             following: true
           }
         } else if (Date.now() - result.follows.timestamp > 1 * 60 * 1000) {
-          console.log(
-            'checkFollows',
-            'follows is too old',
-            result.follows.timestamp
-          )
+          log('follows is too old', result.follows.timestamp)
 
           await syncLocalWithFollowsCsv()
 
           if (account in result.follows.content) {
-            console.log('checkFollows', 'account in follows now', account)
+            log('account in follows now', account)
             return {
               url: result.InstanceHttps + '@' + account,
               following: true
             }
           } else {
-            console.log('checkFollows', 'account not in follows now', account)
+            log('account not in follows now', account)
           }
         } else {
-          console.log(
+          log(
             'checkFollows',
             'follows is not too old',
             result.follows.timestamp
@@ -1817,18 +1881,13 @@ async function checkFollows (url, settings) {
         }
       }
 
-      console.log(
-        'checkFollows',
-        'account not in follows',
-        account,
-        result.follows
-      )
+      log('account not in follows', account, result.follows)
 
       if (get(settings, 'noSync')) {
-        console.log('checkFollows', 'noSync', { result, keys, url })
+        log('noSync', { result, keys, url })
         return { url: result.InstanceHttps + '@' + account, following: false }
       } else {
-        console.log('checkFollows', 'inner sync', { result, keys, url })
+        log('inner sync', { result, keys, url })
 
         await syncLocalWithFollowsCsv()
 
@@ -1839,7 +1898,7 @@ async function checkFollows (url, settings) {
       }
     }
   } else if (!get(settings, 'noSync')) {
-    console.log('checkFollows', 'outer sync', { result, keys, url })
+    log('outer sync', { result, keys, url })
 
     await syncLocalWithFollowsCsv()
 
@@ -1847,32 +1906,31 @@ async function checkFollows (url, settings) {
 
     return checkFollows(url, settings)
   } else {
-    console.log('checkFollows', 'no result', { result, keys, url, settings })
+    log('no result', { result, keys, url, settings })
   }
 
-  let urlObject = new URL(url)
-  let followsUrl = new URL(result.InstanceHttps)
+  let urlObject = getUrlOrNull(url)
+  let followsUrl = getUrlOrNull(result.InstanceHttps)
   followsUrl.pathname = urlObject.pathname.split('/')[1]
 
-  console.log(
-    'checkFollows',
-    'not following',
-    'followsUrl',
-    'backup generated',
-    { followsUrl, urlObject, result, settings }
-  )
+  log('not following', 'followsUrl', 'backup generated', {
+    followsUrl,
+    urlObject,
+    result,
+    settings
+  })
 
   return { url: followsUrl.href, following: false }
 }
 
 export async function sendMessage (tabId, response, settings) {
   if (get(settings, 'type')) {
-    console.log('sendMessage', 'type', get(settings, 'type'), response)
+    log('type', get(settings, 'type'), response)
     Object.assign(response, { type: get(settings, 'type') })
   }
 
   if (get(settings, 'content')) {
-    console.log('sendMessage', 'content', get(settings, 'content'), response)
+    log('content', get(settings, 'content'), response)
     Object.assign(response, { content: get(settings, 'content') })
   }
 
@@ -1889,17 +1947,17 @@ export async function sendMessage (tabId, response, settings) {
   try {
     return chrome.tabs.sendMessage(tabId, response)
   } catch (error) {
-    // console.error("sendMessage", error);
-    console.log('sendMessage', 'error', error)
+    // error("sendMessage", error);
+    log('error', error)
   }
 }
 
 async function applyHandlers (result) {
-  console.log('handleMessage', 'onConnect', 'applying handlers', { result })
+  log('onConnect', 'applying handlers', { result })
 
   return Promise.allSettled(
     (cache['handlers']?.[result?.name] ?? [defaultHandler])?.map(handler => {
-      console.log('handleMessage', 'onConnect', 'calling handler', {
+      log('onConnect', 'calling handler', {
         result,
         handler
       })
@@ -1911,25 +1969,25 @@ async function applyHandlers (result) {
 export async function onMessage (message, sender, sendResponse) {
   if (Array.isArray(message)) {
     return Promise.allSettled(
-      message.map(m => onMessage(m, sender, sendResponse))
+      message?.map(m => onMessage(m, sender, sendResponse))
     )
   }
 
   let response = {}
 
-  if (message.timestamp) {
-    if (message.group) {
+  if (message?.timestamp) {
+    if (message?.group) {
       Object.assign(response, {
-        group: message.group,
-        timestamp: message.timestamp
+        group: message?.group,
+        timestamp: message?.timestamp
       })
     } else {
-      Object.assign(response, { timestamp: message.timestamp })
+      Object.assign(response, { timestamp: message?.timestamp })
     }
   }
 
-  if (message.type) {
-    Object.assign(response, { type: message.type })
+  if (message?.type) {
+    Object.assign(response, { type: message?.type })
   }
 
   Object.assign(response, {
@@ -1941,13 +1999,13 @@ export async function onMessage (message, sender, sendResponse) {
   Object.assign(response.parent.sender, sender)
   Object.assign(response.parent.sendResponse, sendResponse)
 
-  console.log('onMessage', message, sender, sendResponse, response)
+  log(message, sender, sendResponse, response)
 
-  if (message.type === 'port') {
+  if (message?.type === 'port') {
     // onMessage({port, message, type: "port", name: port.name, content: message, sender: port});
 
-    let port = message.port || sender
-    let message = message.message || message.content || message
+    let port = message?.port || sender
+    let message = message?.message || message?.content || message
 
     applyHandlers({
       port,
@@ -1957,29 +2015,31 @@ export async function onMessage (message, sender, sendResponse) {
       content: message,
       sender: port
     })
+
+    return true
   }
 
-  let senderUrl = new URL(sender.tab.url)
+  let senderUrl = getUrlOrNull(sender?.tab?.url)
 
-  // let instance = new URL(await getInstance());
+  // let instance = getUrlOrNull(await getInstance());
   let instance
   try {
-    instance = new URL(await getInstance())
+    instance = getUrlOrNull(await getInstance())
   } catch (error) {
-    // console.error("onMessage", "getInstance", error);
-    console.log('onMessage', 'getInstance', error)
+    // error("onMessage", "getInstance", error);
+    log('getInstance', error)
   }
 
-  if (message.type == 'getStorage') {
+  if (message?.type == 'getStorage') {
     Object.assign(
       response.content,
-      await getStorage(message.content.keys, { strict: true })
+      await getStorage(message?.content.keys, { strict: true })
     )
-    sendMessage(sender.tab.id, response)
-  } else if (message.type == 'setStorage') {
+    sendMessage(sender?.tab?.id, response)
+  } else if (message?.type == 'setStorage') {
     await setStorage(message)
   } else if (
-    message.type == 'follow' &&
+    message?.type == 'follow' &&
     senderUrl &&
     senderUrl.hostname !== instance.hostname
   ) {
@@ -1990,7 +2050,7 @@ export async function onMessage (message, sender, sendResponse) {
       let account = accounts[0]
       let id = account.id
 
-      console.log('onMessage', 'follow', 'id', {
+      log('follow', 'id', {
         id,
         account,
         accounts,
@@ -2002,28 +2062,28 @@ export async function onMessage (message, sender, sendResponse) {
 
       if (id) {
         let result = await follow(id)
-        sendMessage(sender.tab.id, response, {
+        sendMessage(sender?.tab?.id, response, {
           type: 'following',
           content: result
         })
       } else {
-        console.log('onMessage', 'follow', 'no id', account)
+        log('follow', 'no id', account)
       }
     } else {
-      console.log('onMessage', 'follow', 'no accounts', searchResult)
+      log('follow', 'no accounts', searchResult)
     }
   } else if (
-    message.type == 'onLoad' &&
+    message?.type == 'onLoad' &&
     senderUrl &&
     senderUrl.hostname !== instance.hostname
   ) {
-    console.log('onMessage', 'onLoad', message, sender, sendResponse, response)
+    log('onLoad', message, sender, sendResponse, response)
 
     let followListenerProperty = await getStorageProperty('FollowListener')
     let followingProperty = await getStorageProperty('Following')
 
     if (followListenerProperty || followingProperty) {
-      console.log('onMessage', 'onLoad', 'following check enabled', {
+      log('onLoad', 'following check enabled', {
         senderUrl,
         instance,
         followListenerProperty,
@@ -2033,81 +2093,101 @@ export async function onMessage (message, sender, sendResponse) {
       let followResult = await checkFollows(senderUrl.href)
 
       if (!followResult) {
-        console.log('onMessage', 'onLoad', 'no followResult', {
+        log('onLoad', 'no followResult', {
           followResult,
           senderUrl
         })
         return
       }
-      let followUrl = new URL(followResult.url)
+      let followUrl = getUrlOrNull(followResult.url)
 
       if (followingProperty && followResult.following) {
-        console.log('onMessage', 'onLoad', 'following', {
+        log('onLoad', 'following', {
           followResult,
           followUrl,
           senderUrl
         })
-        sendMessage(sender.tab.id, response, {
+        sendMessage(sender?.tab?.id, response, {
           type: 'following',
           content: { url: followUrl.href }
         })
       } else if (followListenerProperty) {
-        console.log(
-          'onMessage',
-          'onLoad',
-          'not following',
-          'addFollowListener',
-          { followResult, followUrl, senderUrl }
-        )
-        sendMessage(sender.tab.id, response, {
+        log('onLoad', 'not following', 'addFollowListener', {
+          followResult,
+          followUrl,
+          senderUrl
+        })
+        sendMessage(sender?.tab?.id, response, {
           type: 'addFollowListener',
           content: { url: followUrl.href }
         })
       } else {
-        console.log('onMessage', 'onLoad', 'not following', 'no message sent', {
+        log('onLoad', 'not following', 'no message sent', {
           followResult,
           followUrl,
           senderUrl
         })
       }
     } else {
-      console.log('onMessage', 'onLoad', 'following check disabled', {
+      log('onLoad', 'following check disabled', {
         senderUrl
       })
     }
 
     onUpdated(
-      sender.tab.id,
+      sender?.tab?.id,
       { status: 'onMessage', onMessage: true, response },
-      sender.tab
+      sender?.tab
     )
-  } else if (message.type == 'echoRequest') {
-    sendMessage(sender.tab.id, response, { type: 'echoResponse' })
-  } else if (message.type == 'syncLocalWithFollowsCsv') {
+  } else if (message?.type == 'echoRequest') {
+    sendMessage(sender?.tab?.id, response, { type: 'echoResponse' })
+  } else if (message?.type == 'syncLocalWithFollowsCsv') {
     syncLocalWithFollowsCsv()
-  } else if (type === 'onConnect') {
+  } else if (message?.type === 'onConnect') {
     // ports
-    console.log('content.js', 'handleMessage', 'onConnect', {
-      type,
-      url,
-      result
+    log('handleMessage', 'onConnect', {
+      type: message?.type,
+      message,
+      sender,
+      sendResponse,
+      response
     })
-    if (message?.name) {
-      console.log('port', { type, message })
 
-      applyHandlers(message.name, result)
+    if (message?.name) {
+      log({
+        type: message?.type,
+        name: message?.name,
+        message,
+        sender,
+        sendResponse,
+        response
+      })
+
+      applyHandlers(message)
     } else {
-      console.log('port', 'no result name', { type, message })
+      log('no result name', {
+        type: message?.type,
+        message,
+        sender,
+        sendResponse,
+        response
+      })
     }
   } else {
-    console.log('onMessage', 'Unknown message type', message.type, message)
+    log('Unknown message type', {
+      type: message?.type,
+      message,
+      sender,
+      sendResponse,
+      response
+    })
   }
 
   return Promise.resolve()
 }
 
 export function onAlarm (alarm) {
-  console.log('onAlarm', alarm)
+  log(alarm)
 
   if (alarm.name === 'syncCacheWithStorage') {
     syncCacheWithStorage()
@@ -2120,24 +2200,24 @@ function isConnected (port, isConnected) {
   if (port?.name) {
     cache['ports'][port.name] = port
     cache['ports'][port.name].isDisconnected = !isConnected
-    console.log('isConnected', 'port name', { port, isConnected })
+    log('port name', { port, isConnected })
   } else {
-    console.log('isConnected', 'no port name', port)
+    log('no port name', port)
   }
 }
 
 function onDisconnect (port) {
-  console.log('onDisconnect', 'cleaning up on disconnect', { port, this: this })
+  log('cleaning up on disconnect', { port, this: this })
   isConnected(port, false)
 }
 
 function onConnect (port) {
-  console.log('onConnect', port)
+  log(port)
   isConnected(port, true)
 
   if (port?.onMessage) {
-    port.onMessage.addListener(function (message) {
-      console.log('onConnect', 'port.onMessage', { port, message, this: this })
+    port.onMessage?.addListener(function (message) {
+      log('port.onMessage', { port, message, this: this })
       onMessage({
         port,
         message,
@@ -2161,29 +2241,29 @@ function defaultHandler (input) {
 }
 
 cache['handlers'] = {
-  default: [input => console.log('default', 'handler', JSON.stringify(input))]
+  default: [input => log('handler', JSON.stringify(input))]
 }
 
 chrome.action.onClicked.addListener(async tab => {
-  console.log('action.onClicked', tab)
+  log('.onClicked', tab)
   if (await getStorageProperty('OnClickedToggle')) {
-    console.log('action.onClicked', 'action enabled')
+    log('.onClicked', 'action enabled')
     onClicked(tab)
   } else {
-    console.log('action.onClicked', 'action disabled')
+    log('.onClicked', 'action disabled')
   }
 })
 
 chrome.commands.onCommand.addListener(async command => {
   if (await getStorageProperty('Shortcuts')) {
-    console.log('commands.onCommand', 'command enabled')
+    log('.onCommand', 'command enabled')
     if (command === 'toggle') {
-      console.log('commands.onCommand', command)
+      log('.onCommand', command)
     } else {
-      console.log('commands.onCommand', 'Unknown command', command)
+      log('.onCommand', 'Unknown command', command)
     }
   } else {
-    console.log('commands.onCommand', 'command disabled')
+    log('.onCommand', 'command disabled')
   }
 })
 
@@ -2192,7 +2272,7 @@ chrome.alarms.create('syncLocalWithFollowsCsv', { periodInMinutes: 5 })
 chrome.alarms.onAlarm.addListener(onAlarm)
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  console.log('contextMenus.onClicked', info, tab)
+  log('.onClicked', info, tab)
 
   if (
     info.menuItemId == 'context' &&
@@ -2204,29 +2284,28 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 chrome.runtime.onConnect.addListener(onConnect)
 chrome.runtime.onInstalled.addListener(onInstalled)
-chrome.runtime.onMessage.addListener(onMessage)
+chrome.runtime.onMessage?.addListener(onMessage)
 
 chrome.storage.onChanged.addListener(onChanged)
 
 chrome.tabs.onUpdated.addListener(onUpdated)
 
-console.log('background.js', 'loaded')
-
+log('loaded')
 ;(() =>
   (async () => {
-    console.log('background.js', 'syncing')
+    log('syncing')
 
     await syncContextMenus()
-    console.log('background.js', 'synced context menus')
+    log('synced context menus')
 
     await syncLocalWithFollowsCsv()
-    console.log('background.js', 'synced local with follows csv')
+    log('synced local with follows csv')
 
     await syncCacheWithStorage()
-    console.log('background.js', 'synced cache with storage')
+    log('synced cache with storage')
   })())()
 
-console.log('background.js', 'done')
+log('done')
 
 // todo: when follow is clicked set it to pending
 
@@ -2240,7 +2319,7 @@ console.log('background.js', 'done')
 // todo: last url check not working for autoredirect well enough
 // issues with clicking on alt text for image
 // when local and autoredirect remote is on
-// separate 'manualy onclicked' list that disables
+// separate 'manualy onclicked'list that disables
 // autoredirect for those urls, maybe last 10 or so
 
 // todo: context menu for toggle autoredirect
@@ -2248,4 +2327,4 @@ console.log('background.js', 'done')
 // TODO allow jump back from this??????
 //   <!-- https://hub.libranet.de/channel/la_teje8685?mid=b64.aHR0cHM6Ly9odWIubGlicmFuZXQuZGUvaXRlbS9kNTM4NzZlOS01Y2I0LTRjMjQtOTY5OS1kOTE5NjRjZmU2NTk -->
 
-// TODO current method of window.open seems to erase 'back' history. Is there a way to fix this??????
+// TODO current method of window.open seems to erase 'back'history. Is there a way to fix this??????
