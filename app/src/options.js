@@ -1,157 +1,159 @@
-export function get(object, property, settings) {
+export function get (object, property, settings) {
   // console.log("get", { object, property, settings });
-  let defaultValue = settings ? get(settings, "default") : null;
+  let defaultValue = settings ? get(settings, 'default') : null
 
-  let resultCondition = object &&
-      property &&
-      typeof object === "object" &&
-      typeof property === "string" &&
-      property in object &&
-      object[property] !== undefined &&
-      object[property] !== null
-  let result = resultCondition ? object[property] : defaultValue;
+  let resultCondition =
+    object &&
+    property &&
+    typeof object === 'object' &&
+    typeof property === 'string' &&
+    property in object &&
+    object[property] !== undefined &&
+    object[property] !== null
+  let result = resultCondition ? object[property] : defaultValue
 
   // console.log("get", "result", { resultCondition, defaultValue, result });
-  return result;
+  return result
 }
 
-export function permissionRequiredInnerHTML() {
-  return "Permission required.<br>Please try again.";
+export function permissionRequiredInnerHTML () {
+  return 'Permission required.<br>Please try again.'
 }
 
-export async function getAppPermissions() {
-  return await getStorageProperty("scopes") || "write:follows"; //"read:search read:follows";
+export async function getAppPermissions () {
+  return (await getStorageProperty('scopes')) || 'write:follows' //"read:search read:follows";
 }
 
-export async function getRedirectUri() {
-  return await getStorageProperty("redirect_uri") || "urn:ietf:wg:oauth:2.0:oob";
+export async function getRedirectUri () {
+  return (
+    (await getStorageProperty('redirect_uri')) || 'urn:ietf:wg:oauth:2.0:oob'
+  )
 }
 
-export function keyPress(e) {
-  let x = e || window.event;
-  let key = x.keyCode || x.which;
+export function keyPress (e) {
+  let x = e || window.event
+  let key = x.keyCode || x.which
 
   if (key == 13 || key == 3) {
-    document.getElementById("submitButton").click();
+    document.getElementById('submitButton').click()
   }
 }
 
-export function removeUriHandler(url) {
-  return url
-    .replace("https://", "")
-    .replace("http://", "");
+export function removeUriHandler (url) {
+  return url.replace('https://', '').replace('http://', '')
 }
 
-export function cleanDomain(domain) {
+export function cleanDomain (domain) {
+  if (!domain) {
+    return
+  }
+  let cleanDomain = removeUriHandler(domain)
 
-  if (!domain) { return };
-  let cleanDomain = removeUriHandler(domain);
-
-  if (cleanDomain.toString().includes("/")) {
-    return cleanDomain.split("/")[0];
-
+  if (cleanDomain.toString().includes('/')) {
+    return cleanDomain.split('/')[0]
   } else {
-    return cleanDomain;
+    return cleanDomain
   }
 }
 
-export function makeHttps(url) {
-  return "https://" + cleanDomain(url) + "/";
+export function makeHttps (url) {
+  return 'https://' + cleanDomain(url) + '/'
 }
 
-export function extensionPermissionsToRequest(instance, query = ["*"]) {
+export function extensionPermissionsToRequest (instance, query = ['*']) {
   return {
     origins: query.map(query => makeHttps(instance) + query)
-  };
+  }
 }
 
-export async function extensionPermissionsToRequestForInstanceApp(instance) {
-  return extensionPermissionsToRequest(instance, ["api/v*/*", "oauth/*", "@*"]);
+export async function extensionPermissionsToRequestForInstanceApp (instance) {
+  return extensionPermissionsToRequest(instance, ['api/v*/*', 'oauth/*', '@*'])
 }
 
-export async function extensionPermissionsToRequestForReadWriteAllOrigin() {
-  return extensionPermissionsToRequest("*", ["*"]);
+export async function extensionPermissionsToRequestForReadWriteAllOrigin () {
+  return extensionPermissionsToRequest('*', ['*'])
 }
 
-export async function requestPermissions(permissions) {
+export async function requestPermissions (permissions) {
   // console.log("requesting permissions", permissions);
-  return chrome.permissions.request(permissions);
+  return chrome.permissions.request(permissions)
 }
 
-export async function setStorage(object) {
+export async function setStorage (object) {
   // TODO:   if(chrome.runtime.lastError) {
   // console.log("setStorage", object);
-  return chrome.storage.sync.set(object);
+  return chrome.storage.sync.set(object)
 }
 
-export function newTab(url) {
-  return chrome.tabs.create({ url: url.toString() });
+export function newTab (url) {
+  return chrome.tabs.create({ url: url.toString() })
 }
 
-export async function getStorage(keys) {
-  let sync  = await chrome.storage.sync.get(Array.isArray(keys) ? keys : [keys]);
-  let local = await chrome.storage.local.get(Array.isArray(keys) ? keys : [keys]);
-  let result = {};
-  Object.assign(result, sync, local);
+export async function getStorage (keys) {
+  let sync = await chrome.storage.sync.get(Array.isArray(keys) ? keys : [keys])
+  let local = await chrome.storage.local.get(
+    Array.isArray(keys) ? keys : [keys]
+  )
+  let result = {}
+  Object.assign(result, sync, local)
   // console.log("getStorage", { keys, result, sync, local });
-  return result;
+  return result
 }
 
-export async function getStorageProperty(name, defaultValue = null) {
+export async function getStorageProperty (name, defaultValue = null) {
   if (Array.isArray(name) && name.length > 0) {
-    name = name[0];
+    name = name[0]
   }
-  let result = await getStorage([name]);
+  let result = await getStorage([name])
   // console.log("getStorageProperty", { name, result, defaultValue });
-  return get(result, name, { default: defaultValue });
+  return get(result, name, { default: defaultValue })
 }
 
-export function getCurrentVersion() {
-  return chrome.runtime.getManifest().version;
+export function getCurrentVersion () {
+  return chrome.runtime.getManifest().version
 }
 
-export async function getStorageVersion() {
-  return getStorageProperty("Version") || "0.1.0";
+export async function getStorageVersion () {
+  return getStorageProperty('Version') || '0.1.0'
 }
 
-export async function setStorageWithProperty(name, value) {
-  let object = {};
-  object[name] = value;
-  return setStorage(object);
+export async function setStorageWithProperty (name, value) {
+  let object = {}
+  object[name] = value
+  return setStorage(object)
 }
 
-export function setCurrentVersion() {
-  return setStorageWithProperty("Version", getCurrentVersion());
+export function setCurrentVersion () {
+  return setStorageWithProperty('Version', getCurrentVersion())
 }
 
-export async function getClientId() {
-  return getStorageProperty("client_id");
+export async function getClientId () {
+  return getStorageProperty('client_id')
 }
 
-export async function getInstance(isNotForceHttps) {
-
+export async function getInstance (isNotForceHttps) {
   if (isNotForceHttps) {
-    return getStorageProperty("Instance");
+    return getStorageProperty('Instance')
   } else {
-    return getStorageProperty("InstanceHttps");
+    return getStorageProperty('InstanceHttps')
   }
 }
 
-export async function authorizeUser() {
+export async function authorizeUser () {
   // console.log("authorizeUser");
-  const url = new URL(await getInstance() + "oauth/authorize");
+  const url = new URL((await getInstance()) + 'oauth/authorize')
   // console.log("authorizeUser", url);
-  url.searchParams.append("response_type", "code");
-  url.searchParams.append("client_id", await getClientId());
-  url.searchParams.append("redirect_uri", await getRedirectUri());
-  url.searchParams.append("scope", await getAppPermissions());
+  url.searchParams.append('response_type', 'code')
+  url.searchParams.append('client_id', await getClientId())
+  url.searchParams.append('redirect_uri', await getRedirectUri())
+  url.searchParams.append('scope', await getAppPermissions())
   // console.log("authorizeUser", url);
-  newTab(url);
-  window.location.reload(); // comment out during development
+  newTab(url)
+  window.location.reload() // comment out during development
   // todo consider dynamic reload of options page values instead of full page reload
 }
 
-export async function makeApp() {
+export async function makeApp () {
   /*
     We make an app for each user
     Because a user could be on any mastodon instance
@@ -198,66 +200,68 @@ export async function makeApp() {
 
   */
   // console.log("Making App");
-  const url = new URL((await getInstance()) + "api/v1/apps");
-  const host = url.host;
-  const formData = new FormData();
-  const scopes = await getAppPermissions();
-  formData.append("client_name", chrome.runtime.getManifest().name);
-  formData.append("redirect_uris", await getRedirectUri());
-  formData.append("scopes", scopes); // read:search read:follows
-  formData.append(
-    "website",
-    chrome.runtime.getManifest().homepage_url
-  );
+  const url = new URL((await getInstance()) + 'api/v1/apps')
+  const host = url.host
+  const formData = new FormData()
+  const scopes = await getAppPermissions()
+  formData.append('client_name', chrome.runtime.getManifest().name)
+  formData.append('redirect_uris', await getRedirectUri())
+  formData.append('scopes', scopes) // read:search read:follows
+  formData.append('website', chrome.runtime.getManifest().homepage_url)
   // console.log("makeApp", { url, formData });
   let result = await fetch(url, {
-    method: "POST",
-    body: formData,
-  }).then(result => result.json()
-  ).then(result => {
-    return result;
-  });
+    method: 'POST',
+    body: formData
+  })
+    .then(result => result.json())
+    .then(result => {
+      return result
+    })
   // console.log("makeApp result", { result });
 
   if (!result || result.error) {
     // console.error("makeApp error", { result });
-    return result;
+    return result
   }
 
-  let apps = await getStorageProperty("apps") || {};
-  let app = { host };
-  Object.assign(app, result);
-  apps[host] = app;
-  Object.assign(result, { app, apps, url, host, formData, scopes });
-  await setStorage(result);
-  return result;
+  let apps = (await getStorageProperty('apps')) || {}
+  let app = { host }
+  Object.assign(app, result)
+  apps[host] = app
+  Object.assign(result, { app, apps, url, host, formData, scopes })
+  await setStorage(result)
+  return result
 }
 
-export async function onResult() {
-  let result = getStorage(["follows", "Instance"])
+export async function onResult () {
+  let result = getStorage(['follows', 'Instance'])
   // console.log("onResult", { result });
 
   if (result.Instance) {
-    let instanceLabel = result.Instance;
+    let instanceLabel = result.Instance
 
     if (result.follows.content) {
-
       if (Object.keys(result.follows.content).length > 0) {
         instanceLabel =
-          instanceLabel + "\n(" + Object.keys(result.follows.content).length + ")";
+          instanceLabel +
+          '\n(' +
+          Object.keys(result.follows.content).length +
+          ')'
       }
     }
-    document.getElementById("instanceLabel").innerHTML = instanceLabel;
-    document.getElementById("instanceTextBox").value = "Thanks!";
+    document.getElementById('instanceLabel').innerHTML = instanceLabel
+    document.getElementById('instanceTextBox').value = 'Thanks!'
   }
 }
 
-export async function permissionDeniedInstance() {
-  await setStorageWithProperty("PermissionDeniedInstance", true);
-  document.getElementById("instanceLabel").innerHTML = permissionRequiredInnerHTML();
+export async function permissionDeniedInstance () {
+  await setStorageWithProperty('PermissionDeniedInstance', true)
+  document.getElementById(
+    'instanceLabel'
+  ).innerHTML = permissionRequiredInnerHTML()
 }
 
-export async function initializeStorage(input) {
+export async function initializeStorage (input) {
   // console.log("initializeStorage", input);
   let result = await setStorage({
     Instance: input,
@@ -265,118 +269,128 @@ export async function initializeStorage(input) {
     InstanceClean: cleanDomain(input),
     PermissionDeniedInstance: false,
     OauthApp: false,
-    Version: getCurrentVersion(),
-  }).then(async (result) => {
+    Version: getCurrentVersion()
+  }).then(async result => {
     // console.log("initializeStorage", {result});
-    await onResult();
-  });
+    await onResult()
+  })
   // console.log(result);
 }
 
-export async function setOauthOption(value) {
-  return setStorageWithProperty("OauthApp", value);
+export async function setOauthOption (value) {
+  return setStorageWithProperty('OauthApp', value)
 }
 
-export async function setChromeReadWriteAllOption(value) {
-  return setStorageWithProperty("ReadWriteAll", value);
+export async function setChromeReadWriteAllOption (value) {
+  return setStorageWithProperty('ReadWriteAll', value)
 }
 
-export async function initializeChromeReadWriteAllOrigin() {
+export async function initializeChromeReadWriteAllOrigin () {
   // console.log("initializeChromeReadWriteAllOrigin");
-  let permissions = await extensionPermissionsToRequestForReadWriteAllOrigin();
+  let permissions = await extensionPermissionsToRequestForReadWriteAllOrigin()
   // console.log("initializeChromeReadWriteAllOrigin", {permissions});
 
-  return await requestPermissions(
-    permissions
-  ).then(() => setChromeReadWriteAllOption(true)
-  ).then(() => setCurrentVersion());
+  return await requestPermissions(permissions)
+    .then(() => setChromeReadWriteAllOption(true))
+    .then(() => setCurrentVersion())
 }
 
-export async function initializeMastodonOauthApp() {
+export async function initializeMastodonOauthApp () {
   // console.log("initializeMastodonOauthApp");
   return makeApp()
-  .then(() => authorizeUser()
-  ).then(() => setOauthOption(true)
-  ).then(() => setCurrentVersion());
+    .then(() => authorizeUser())
+    .then(() => setOauthOption(true))
+    .then(() => setCurrentVersion())
 }
 
-export async function ifTrueThenInitializeChromeReadWriteAllOrigin(option, element, settings) {
+export async function ifTrueThenInitializeChromeReadWriteAllOrigin (
+  option,
+  element,
+  settings
+) {
   // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {option, element, settings});
-  let checked = get(element, "checked");
+  let checked = get(element, 'checked')
   // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", {checked});
 
   if (checked) {
     // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "checked");
-    await initializeChromeReadWriteAllOrigin(
-    ).then(async () => setOauthOption(true)
-    ).catch(async () => setOauthOption(false));
+    await initializeChromeReadWriteAllOrigin()
+      .then(async () => setOauthOption(true))
+      .catch(async () => setOauthOption(false))
   } else {
     // console.log("ifTrueThenInitializeChromeReadWriteAllOrigin", "unchecked");
-    await setOauthOption(false);
+    await setOauthOption(false)
   }
   // window.location.reload(); // comment out during development
   // todo consider dynamic reload of options page values instead of full page reload
 }
 
-export async function ifTrueThenInitializeMastodonOauthApp(option, element, settings) {
+export async function ifTrueThenInitializeMastodonOauthApp (
+  option,
+  element,
+  settings
+) {
   // console.log("ifTrueThenInitializeMastodonOauthApp", {option, element, settings});
-  let followingElement = document.getElementById("FollowListener");
+  let followingElement = document.getElementById('FollowListener')
 
-  if (get(element, "checked")) {
+  if (get(element, 'checked')) {
     // console.log("ifTrueThenInitializeMastodonOauthApp", "checked");
-    await initializeMastodonOauthApp(
-    ).then(async () => {
-      // console.log("ifTrueThenInitializeMastodonOauthApp", "initializeMastodonOauthApp");
-      if (followingElement) {
-        await setStorageWithProperty("FollowListener", true);
-        followingElement.disabled = false;
-        followingElement.checked = true;
-        followingElement.classList.add("enabled");
-        followingElement.classList.remove("disabled");
-      } else {
-        // console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
-      }
-    }).then(() => setOauthOption(true)
-    ).catch(() => setOauthOption(false));
+    await initializeMastodonOauthApp()
+      .then(async () => {
+        // console.log("ifTrueThenInitializeMastodonOauthApp", "initializeMastodonOauthApp");
+        if (followingElement) {
+          await setStorageWithProperty('FollowListener', true)
+          followingElement.disabled = false
+          followingElement.checked = true
+          followingElement.classList.add('enabled')
+          followingElement.classList.remove('disabled')
+        } else {
+          // console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
+        }
+      })
+      .then(() => setOauthOption(true))
+      .catch(() => setOauthOption(false))
   } else {
     // console.log("ifTrueThenInitializeMastodonOauthApp", "unchecked");
-    await setOauthOption(false);
+    await setOauthOption(false)
     if (followingElement) {
-      await setStorageWithProperty("FollowListener", false);
-      followingElement.classList.add("disabled");
-      followingElement.classList.remove("enabled");
-      followingElement.checked = false;
-      followingElement.disabled = true;
+      await setStorageWithProperty('FollowListener', false)
+      followingElement.classList.add('disabled')
+      followingElement.classList.remove('enabled')
+      followingElement.checked = false
+      followingElement.disabled = true
     } else {
       // console.error("ifTrueThenInitializeMastodonOauthApp", "followingElement not found");
     }
   }
   // window.location.reload(); // comment out during development
   // todo consider dynamic reload of options page values instead of full page reload
-
 }
 // # todo setup oauth to contain url in settings and reuse indefinitely whnever getinstance matches
 // # todo setup urls for toggle to include more information, where it was called, tally of times called, tally of times toggle
-export async function onClicked() {
-  let input = document.getElementById("instanceTextBox").value.trim();
+export async function onClicked () {
+  let input = document.getElementById('instanceTextBox').value.trim()
 
-  if (input && input != "Thanks!") {
-    let instance = await getInstance();
+  if (input && input != 'Thanks!') {
+    let instance = await getInstance()
     // console.log("onClicked", { input, instance });
 
     if (!instance || instance != input) {
-      await requestPermissions(await extensionPermissionsToRequestForInstanceApp(input)
-      ).catch(async () => {
-        await permissionDeniedInstance();
-        Promise.reject("permissionDeniedInstance");
-      }).then(() => initializeStorage(input));
+      await requestPermissions(
+        await extensionPermissionsToRequestForInstanceApp(input)
+      )
+        .catch(async () => {
+          await permissionDeniedInstance()
+          Promise.reject('permissionDeniedInstance')
+        })
+        .then(() => initializeStorage(input))
       // window.location.reload(); // comment out during development
       // todo consider dynamic reload of options page values instead of full page reload
     }
   }
 }
 
-export async function setupOptionsListenerById(option, settings) {
+export async function setupOptionsListenerById (option, settings) {
   // console.log("setupOptionsListenerById", {option, settings});
   // todo: setupOptionsListenerById 'dependencyCallback'
   // exampe callback
@@ -390,181 +404,222 @@ export async function setupOptionsListenerById(option, settings) {
   // todo: update apps to be only source for oauth
   // apps[instanceUrl.hostname] = { access_token, client_id, client_secret, code, created_at, id, redirect_uri, scopes, token_type, updated_at, url }
   // something like that
-  let disabled = false;
+  let disabled = false
 
-  if (get(settings, "disabled")) {
-    disabled = settings.disabled;
+  if (get(settings, 'disabled')) {
+    disabled = settings.disabled
   }
 
-  let element = document.getElementById(option);
-  let dropdown = option + "Dropdown";
-  let dropdownElement = document.getElementById(dropdown);
+  let element = document.getElementById(option)
+  let dropdown = option + 'Dropdown'
+  let dropdownElement = document.getElementById(dropdown)
   // console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
   if (element) {
-    let result = await getStorageProperty(option);
+    let result = await getStorageProperty(option)
     // console.log("setupOptionsListenerById", {option, result});
 
     if (result === null || result === undefined) {
       // console.log("setting default for", option);
-      result = get(settings, "default", { default: false });
+      result = get(settings, 'default', { default: false })
       // console.log("result", {option, result});
-      await setStorageWithProperty(option, result);
+      await setStorageWithProperty(option, result)
     }
 
-    element.checked = result ? true : false;
+    element.checked = result ? true : false
 
     let defaultCallback = async () => {
       // console.log("defaultCallback", {option, element});
       if (dropdownElement) {
-          dropdownElement.disabled = !element.checked;
+        dropdownElement.disabled = !element.checked
 
-          for (let option of dropdownElement.options) {
-            option.disabled = !element.checked;
-          }
+        for (let option of dropdownElement.options) {
+          option.disabled = !element.checked
+        }
       }
-      await setStorageWithProperty(option, element.checked);
+      await setStorageWithProperty(option, element.checked)
     }
 
-    let callbackFunction = defaultCallback;
-    let callbackSetting = get(settings, "callback");
+    let callbackFunction = defaultCallback
+    let callbackSetting = get(settings, 'callback')
 
     // console.log("callbackSetting", {option, callbackSetting});
 
     if (callbackSetting) {
       callbackFunction = () => {
         // console.log("callbackFunction", {option, element});
-        callbackSetting(option, element, settings);
+        callbackSetting(option, element, settings)
       }
     }
 
-    element.addEventListener("click", callbackFunction, { passive: true });
-    element.disabled = false;
+    element.addEventListener('click', callbackFunction, { passive: true })
+    element.disabled = false
 
     if (disabled) {
-      element.classList.add("disabled");
-      element.classList.remove("enabled");
+      element.classList.add('disabled')
+      element.classList.remove('enabled')
     } else {
-      element.classList.add("enabled");
-      element.classList.remove("disabled");
+      element.classList.add('enabled')
+      element.classList.remove('disabled')
     }
   }
 
   if (dropdownElement) {
     // console.log("dropdownElement", {dropdown, dropdownElement});
-    let dropdownDefault = get(settings, "dropdownDefault");
-    let result = await getStorageProperty(dropdown);
+    let dropdownDefault = get(settings, 'dropdownDefault')
+    let result = await getStorageProperty(dropdown)
 
     if (result === null || result === undefined) {
       // console.log("setting default for", dropdown);
-      result = dropdownDefault;
+      result = dropdownDefault
       // console.log("result", {dropdown, result});
-      await setStorageWithProperty(dropdown, result);
+      await setStorageWithProperty(dropdown, result)
     }
 
-    dropdownElement.value = result;
+    dropdownElement.value = result
 
     let dropdownDefaultCallback = async () => {
       // console.log("defaultDropdownCallback", {dropdown, dropdownElement});
-      await setStorageWithProperty(dropdown, dropdownElement.value);
+      await setStorageWithProperty(dropdown, dropdownElement.value)
     }
 
-    let dropdownCallbackFunction = dropdownDefaultCallback;
-    let dropdownCallbackSetting = get(settings, "dropdownCallback");
+    let dropdownCallbackFunction = dropdownDefaultCallback
+    let dropdownCallbackSetting = get(settings, 'dropdownCallback')
 
     if (dropdownCallbackSetting) {
       dropdownCallbackFunction = () => {
         // console.log("dropdownCallbackFunction", {dropdown, dropdownElement});
-        dropdownCallbackSetting(dropdown, dropdownElement, settings);
+        dropdownCallbackSetting(dropdown, dropdownElement, settings)
       }
     }
 
-    dropdownElement.addEventListener("change", dropdownCallbackFunction, { passive: true });
+    dropdownElement.addEventListener('change', dropdownCallbackFunction, {
+      passive: true
+    })
 
     for (let option of dropdownElement.options) {
-      option.disabled = !element.checked;
+      option.disabled = !element.checked
     }
 
-    dropdownElement.disabled = !element.checked;
+    dropdownElement.disabled = !element.checked
   }
 
   // console.log("setupOptionsListenerById", {option, element, dropdown, dropdownElement});
 
-  return element;
+  return element
 }
 
-export async function onClickedShortcut() {
-  await newTab('chrome://extensions/shortcuts');
+export async function onClickedShortcut () {
+  await newTab('chrome://extensions/shortcuts')
 }
 
-export async function onLoad() {
+export async function onLoad () {
   await getStorage([
-    "follows",
-    "Instance",
-    "PermissionDeniedInstance",
-    "OauthApp"
+    'follows',
+    'Instance',
+    'PermissionDeniedInstance',
+    'OauthApp'
   ]).then(async result => {
-    let instanceLabel = result.Instance;
+    let instanceLabel = result.Instance
 
     if (result.Instance) {
-      document.getElementById("instanceTextBox").value = instanceLabel;
-      await setupOptionsListenerById("OpenInNewTab", { disabled: false });
-      await setupOptionsListenerById("AutoJumpOnLoadStatus", { disabled: false, dropdownDefault: "local" });
-      await setupOptionsListenerById("AutoJumpOnLoadAccount", { disabled: false, dropdownDefault: "remote"});
-      await setupOptionsListenerById("AutoJumpOnCopyPastePrompt", { disabled: true });
-      await setupOptionsListenerById("ReadWriteAll", { disabled: false, callback: ifTrueThenInitializeChromeReadWriteAllOrigin });
-      await setupOptionsListenerById("OauthApp", { disabled: false, callback: ifTrueThenInitializeMastodonOauthApp });
-      await setupOptionsListenerById("UpdateStats", { disabled: true });
-      await setupOptionsListenerById("Following", { disabled: false, default: true  });
-      await setupOptionsListenerById("OnClickedJump", { disabled: false, default: true });
-      await setupOptionsListenerById("ContextMenuJump", { disabled: false, default: true });
-      await setupOptionsListenerById("ContextMenu", { disabled: false, default: true });
-      await setupOptionsListenerById("Shortcuts", { disabled: true, default: true });
+      document.getElementById('instanceTextBox').value = instanceLabel
+      await setupOptionsListenerById('OpenInNewTab', { disabled: false })
+      await setupOptionsListenerById('AutoJumpOnLoadStatus', {
+        disabled: false,
+        dropdownDefault: 'local'
+      })
+      await setupOptionsListenerById('AutoJumpOnLoadAccount', {
+        disabled: false,
+        dropdownDefault: 'remote'
+      })
+      await setupOptionsListenerById('AutoJumpOnCopyPastePrompt', {
+        disabled: true
+      })
+      await setupOptionsListenerById('ReadWriteAll', {
+        disabled: false,
+        callback: ifTrueThenInitializeChromeReadWriteAllOrigin
+      })
+      await setupOptionsListenerById('OauthApp', {
+        disabled: false,
+        callback: ifTrueThenInitializeMastodonOauthApp
+      })
+      await setupOptionsListenerById('UpdateStats', { disabled: true })
+      await setupOptionsListenerById('Following', {
+        disabled: false,
+        default: true
+      })
+      await setupOptionsListenerById('OnClickedJump', {
+        disabled: false,
+        default: true
+      })
+      await setupOptionsListenerById('ContextMenuJump', {
+        disabled: false,
+        default: true
+      })
+      await setupOptionsListenerById('ContextMenu', {
+        disabled: false,
+        default: true
+      })
+      await setupOptionsListenerById('Shortcuts', {
+        disabled: true,
+        default: true
+      })
 
-      let shortcutsButtonElement = document.getElementById("shortcutsButton");
+      let shortcutsButtonElement = document.getElementById('shortcutsButton')
 
       if (shortcutsButtonElement) {
-        shortcutsButtonElement.addEventListener("click", onClickedShortcut, { passive: true });
-        shortcutsButtonElement.disabled = false;
-        shortcutsButtonElement.classList.add("enabled");
-        shortcutsButtonElement.classList.remove("disabled");
+        shortcutsButtonElement.addEventListener('click', onClickedShortcut, {
+          passive: true
+        })
+        shortcutsButtonElement.disabled = false
+        shortcutsButtonElement.classList.add('enabled')
+        shortcutsButtonElement.classList.remove('disabled')
       }
     }
 
     if (result.OauthApp) {
-      await setupOptionsListenerById("FollowListener", { disabled: false, default: true });
+      await setupOptionsListenerById('FollowListener', {
+        disabled: false,
+        default: true
+      })
     } else {
-      await setupOptionsListenerById("FollowListener", { disabled: true });
+      await setupOptionsListenerById('FollowListener', { disabled: true })
     }
 
     if (result.PermissionDeniedInstance) {
-      document.getElementById("instanceLabel").innerHTML =
-        permissionRequiredInnerHTML();
-
+      document.getElementById(
+        'instanceLabel'
+      ).innerHTML = permissionRequiredInnerHTML()
     } else if (instanceLabel) {
-
       if (result.follows) {
         // console.log("result.follows", result.follows);
 
-        if (result.follows.content && Object.keys(result.follows.content).length > 0) {
+        if (
+          result.follows.content &&
+          Object.keys(result.follows.content).length > 0
+        ) {
           instanceLabel =
-            instanceLabel + "\n(" + Object.keys(result.follows.content).length + ")";
+            instanceLabel +
+            '\n(' +
+            Object.keys(result.follows.content).length +
+            ')'
         }
       }
 
       if (!result.PermissionDeniedInstance) {
-        document.getElementById("instanceLabel").innerHTML = instanceLabel;
+        document.getElementById('instanceLabel').innerHTML = instanceLabel
       }
     }
-  });
+  })
 
-  let submitButtonElement = document.getElementById("submitButton");
+  let submitButtonElement = document.getElementById('submitButton')
 
   if (submitButtonElement) {
-    submitButtonElement.addEventListener("click", onClicked, { passive: true });
+    submitButtonElement.addEventListener('click', onClicked, { passive: true })
   }
 
-  document.onkeypress = keyPress;
+  document.onkeypress = keyPress
 }
 
-document.addEventListener("DOMContentLoaded", onLoad, { passive: true });
+document.addEventListener('DOMContentLoaded', onLoad, { passive: true })
