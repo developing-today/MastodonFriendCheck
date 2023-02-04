@@ -2047,7 +2047,7 @@ export async function onMessage (message, sender, sendResponse) {
       let account = accounts[0]
       let id = account.id
 
-      log('follow', 'id', {
+      log('follow', {
         id,
         account,
         accounts,
@@ -2074,13 +2074,13 @@ export async function onMessage (message, sender, sendResponse) {
     senderUrl &&
     senderUrl.hostname !== instance.hostname
   ) {
-    log('onLoad', message, sender, sendResponse, response)
+    log(message, sender, sendResponse, response)
 
     let followListenerProperty = await getStorageProperty('FollowListener')
     let followingProperty = await getStorageProperty('Following')
 
     if (followListenerProperty || followingProperty) {
-      log('onLoad', 'following check enabled', {
+      log('following check enabled', {
         senderUrl,
         instance,
         followListenerProperty,
@@ -2090,7 +2090,7 @@ export async function onMessage (message, sender, sendResponse) {
       let followResult = await checkFollows(senderUrl.href)
 
       if (!followResult) {
-        log('onLoad', 'no followResult', {
+        log('no followResult', {
           followResult,
           senderUrl
         })
@@ -2099,7 +2099,7 @@ export async function onMessage (message, sender, sendResponse) {
       let followUrl = getUrlOrNull(followResult.url)
 
       if (followingProperty && followResult.following) {
-        log('onLoad', 'following', {
+        log('following', {
           followResult,
           followUrl,
           senderUrl
@@ -2109,7 +2109,7 @@ export async function onMessage (message, sender, sendResponse) {
           content: { url: followUrl.href }
         })
       } else if (followListenerProperty) {
-        log('onLoad', 'not following', 'addFollowListener', {
+        log('not following', 'addFollowListener', {
           followResult,
           followUrl,
           senderUrl
@@ -2119,14 +2119,14 @@ export async function onMessage (message, sender, sendResponse) {
           content: { url: followUrl.href }
         })
       } else {
-        log('onLoad', 'not following', 'no message sent', {
+        log('not following', 'no message sent', {
           followResult,
           followUrl,
           senderUrl
         })
       }
     } else {
-      log('onLoad', 'following check disabled', {
+      log('following check disabled', {
         senderUrl
       })
     }

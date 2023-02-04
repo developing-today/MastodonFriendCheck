@@ -139,7 +139,7 @@ function getCallbackTimestamp (group, callback) {
     }
     object = cache[group]
   }
-  log('got callback timestamp', {
+  log({
     group,
     timestamp,
     callback
@@ -158,13 +158,12 @@ function getCallbackTimestamp (group, callback) {
     ? callback
     : function (result) {
         log(
-          'content.js',
           'defaultCallback_getCallbackTimestamp',
           'got result',
           { result }
         )
       }
-  log('got callback timestamp', {
+  log({
     group,
     timestamp,
     callback
@@ -274,7 +273,6 @@ function addFollowListener (button, url) {
             fixFollowButton(button, url)
           } else {
             log(
-              'content.js',
               'addFollowListener',
               'got unexpected result',
               result
@@ -289,6 +287,8 @@ function addFollowListener (button, url) {
 }
 
 async function findFollowButton (url, callback, settings) {
+  if (
+
   if (!settings) {
     settings = {}
   }
@@ -361,7 +361,6 @@ async function handleMessage (result) {
       findFollowButton(url, fixFollowButton, result)
     } else if (type === 'addFollowListener') {
       log(
-        'content.js',
         'handleMessage',
         'not following',
         'addFollowListener',
