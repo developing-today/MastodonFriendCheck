@@ -1,9 +1,11 @@
 # MastodonFriendCheck
+
 If you follow a Mastodon Web Profile, it changes "Remote Follow" to "Following"
 
-
 Features:
-- If following, follow button lists following.
+
+- If following, follow button shows following.
+- Otherwise, fixes follow button to remote follow.
 - Toggle/Jump Between Local Mastodon Page & Original Mastodon page
   - extension menu clickable action
   - context menu clickable button
