@@ -111,7 +111,7 @@ export function removeUriHandler (url) {
 
 export function cleanDomain (domain) {
   if (!domain) {
-    return
+    return null
   }
   let cleanDomain = removeUriHandler(domain)
 

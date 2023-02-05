@@ -190,12 +190,12 @@ export async function getStorageProperty (name) {
 }
 
 export function newTab (url, settings) {
-  log(':', { url })
+  log({ url })
   chrome.tabs.create({ url: url })
 }
 
 export function updateTab (url, settings) {
-  log(': ', { url, settings })
+  log({ url, settings })
   let tabId = get(settings, 'tabId')
   //  || (get(settings, "tab").id || null;
   if (!tabId) {
@@ -208,7 +208,7 @@ export function updateTab (url, settings) {
     tabId = null
   }
   chrome.tabs.update(tabId, { url })
-  log(': ', { tabId, url })
+  log({ tabId, url })
 }
 
 export async function sendUrlToTab (url, settings) {
@@ -279,7 +279,7 @@ export function removeUriHandler (url) {
 }
 
 export function cleanDomain (domain) {
-  if (!domain) return
+  if (!domain) return null
   let cleanDomain = removeUriHandler(domain.toString())
   if (cleanDomain.includes('/')) {
     return cleanDomain.split('/')[0]
@@ -309,7 +309,7 @@ export async function search (query, settings) {
   let limit = get(settings, 'limit', { default: 10 })
   let instance = get(settings, 'instance') || (await getInstance())
   if (!instance || !query) {
-    return
+    return null
   }
   let url = getUrlOrNull(instance + 'api/v2/search')
   url.searchParams.append('q', query)
@@ -323,35 +323,30 @@ export function getCodeRedirectPath () {
 }
 
 export async function setCode (url, settings) {
-  // TODO:
   // https://hachyderm.io/oauth/authorize/native?code=6Z4BHNsk-ltNXBoMzlL_D28xYNE35ElYeXKTncATnbw
   let codeSplit = url.split('?')
   let instance = await getInstance()
 
   log({ url, codeSplit, instance, settings })
+
   if (instance + getCodeRedirectPath() == codeSplit[0]) {
     log('match', { url, codeSplit, instance, settings })
     updateTab(instance, settings)
     let code = codeSplit[1].split('=')[1]
     log('match', { code })
     await setStorageWithProperty('code', code)
+
     return code
   } else {
     log('no match', { url, codeSplit, instance, settings })
-    return
-  }
-}
 
-export async function getCode () {
-  return getStorageProperty('code').then(result => {
-    if (result) {
-      return result
-    }
-  })
+    return null
+  }
 }
 
 export function mastodonUrlResult (url, settings) {
   let result = { url, settings: {} }
+
   if (settings) {
     Object.assign(result.settings, settings)
     delete settings.url
@@ -361,6 +356,7 @@ export function mastodonUrlResult (url, settings) {
   if (!result.pageType) {
     result.pageType = 'account'
   }
+
   return result
 }
 
@@ -378,6 +374,7 @@ export function makeMastodonUrl (
   // {instance: 'thedreaming.city', id: '109660728919305576', type: 'url-host'}
   // {instance: 'https://hachyderm.io/', id: '109660728945403082', type: 'local'
   // determine why this one cant be found what do then https://thedreaming.city/@paeneultima/109733736814167269
+
   let url = [makeHttps(local).slice(0, -1), '@' + username]
 
   if (remote) {
@@ -399,11 +396,18 @@ export function makeMastodonUrl (
 
   let result = {
     accounts: [
-      { instance: remote || local, username, type: 'built', type: 'built' }
+      { instance: remote || local, username, type: 'built', url: url.join('/') }
     ],
     statuses: !status
       ? []
-      : [{ instance: remote || local, id: status, type: 'built' }]
+      : [
+          {
+            instance: remote || local,
+            id: status,
+            type: 'built',
+            url: url.join('/')
+          }
+        ]
   }
   log('result', { result, settings, url })
 
@@ -547,7 +551,7 @@ export async function statuses (id, settings) {
   let instance = get(settings, 'instance') || (await getInstance())
 
   if (!instance || !id) {
-    return
+    return null
   }
 
   let url = getUrlOrNull(instance + 'api/v1/statuses/' + id)
@@ -872,7 +876,7 @@ export async function jumpMastodonUrl (url, settings) {
           let statusUrl = get(results, 'url')
 
           if (!statusUrl) {
-            return
+            return null
           }
           let statusUrlObject = getUrlOrNull(statusUrl)
           let statusesArray = [
@@ -912,7 +916,7 @@ export async function jumpMastodonUrl (url, settings) {
         log('local to local') // ???
         // return makeMastodonUrl(
         // instance, username, null, status, subpath);
-        return
+        return null
       }
     } else {
       log('remote to local')
@@ -1062,7 +1066,9 @@ export async function setToken (settings) {
   let url = getUrlOrNull(
     get(settings, 'url', { default: (await getInstance()) + 'oauth/token' })
   )
-  let code = get(settings, 'code', { default: await getCode() })
+  let code = get(settings, 'code', {
+    default: await getStorageProperty('code')
+  })
   let client_id = get(settings, 'client_id', {
     default: await getStorageProperty('client_id')
   })
@@ -1157,7 +1163,7 @@ export async function jumpMastodonTab (tab, settings) {
   return jumpMastodonUrl(tab.url, settings).then(async result => {
     if (!result) {
       log('no result')
-      return
+      return null
     }
 
     if (get(settings, 'locality') == 'remote-remote') {
@@ -1186,7 +1192,7 @@ export async function jumpMastodonTab (tab, settings) {
 
     if (!result) {
       log('no result')
-      return
+      return null
     }
 
     settings = settings || {}
@@ -1313,7 +1319,7 @@ export async function onInstalled (installInfo) {
         chrome.runtime.openOptionsPage()
       } else {
         log('newTab')
-        newTab(getChromeUrl('options.html'))
+        newTab(getChromeUrl('src/options.html'))
       }
     } else {
       log('no major version change')
@@ -1435,7 +1441,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
 
     if (!tab) {
       log('no tab')
-      return
+      return null
     }
 
     if (!tab.url) {
@@ -1454,7 +1460,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
           changeInfo,
           tab
         })
-        return
+        return null
       } else {
         log('tab is not populated', {
           tabId,
@@ -1474,7 +1480,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
               changeInfo,
               tab
             })
-            return
+            return null
           }
         })
       }
@@ -1482,17 +1488,17 @@ export async function onUpdated (tabId, changeInfo, tab) {
 
     if (!tab.url) {
       log('no tab.url')
-      return
+      return null
     }
 
     if (tab.url.indexOf('https://') !== 0 && tab.url.indexOf('http://') !== 0) {
       log('not http(s)', tab.url)
-      return
+      return null
     }
 
     if (tab.url.indexOf('chrome://') === 0) {
       log('chrome://', tab.url)
-      return
+      return null
     }
 
     if (tab.url.indexOf(getCodeRedirectPath()) > -1) {
@@ -1501,12 +1507,12 @@ export async function onUpdated (tabId, changeInfo, tab) {
       let token = await setToken({ code, tabId, changeInfo, tab })
       let verifyResults = await verify({ token, tabId, changeInfo, tab })
       log('code redirect', { code, token, verify })
-      return
+      return null
     }
 
     if (tab.url.indexOf('@') === -1) {
       log('no @', tab.url)
-      return
+      return null
     }
 
     log('init', tab.url)
@@ -1524,7 +1530,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
         timestamp,
         timeBetweenUpdates
       })
-      return
+      return null
     }
     let instance = await getInstance()
     let locality = null
@@ -1592,7 +1598,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
               accountDropdownMatches,
               locality
             })
-            return
+            return null
           }
         }
       } else {
@@ -1660,7 +1666,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
             accountDropdownMatches,
             locality
           })
-          return
+          return null
         }
       }
 
@@ -1676,7 +1682,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
             tabUrl: tab.url
           })
 
-          return
+          return null
         }
 
         let lastUrlData = cache.lastUrls[cache.lastUrls.length - 1]
@@ -1694,7 +1700,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
               timeBetweenUpdatesForSameUrlAndIsLastUrl
             })
 
-            return
+            return null
           }
         }
 
@@ -1716,7 +1722,7 @@ export async function onUpdated (tabId, changeInfo, tab) {
             lastUrls: cache.lastUrls
           })
 
-          return
+          return null
         }
       }
       log('passed conditions')
@@ -1753,7 +1759,7 @@ async function syncContextMenus () {
     if (await getStorageProperty('ContextMenuJump')) {
       await chrome.contextMenus.create({
         id: 'context',
-        title: 'Jump Mastodon Page 🐘 🐘 🐘 Jump Now',
+        title: 'Toggle Mastodon Page 🐘 🐘 🐘 Jump Now',
         documentUrlPatterns: [
           '*://*/@*',
           '*://*/users/*',
@@ -2094,7 +2100,7 @@ export async function onMessage (message, sender, sendResponse) {
           followResult,
           senderUrl
         })
-        return
+        return null
       }
       let followUrl = getUrlOrNull(followResult.url)
 
@@ -2306,7 +2312,7 @@ log('done')
 
 // todo: when follow is clicked set it to pending
 
-// todo on follow click return
+// todo on follow click return null
 //      url of home instance profile
 //      not same url clicked.
 
@@ -2328,3 +2334,7 @@ log('done')
 
 // TODO allow fediact reply to work
 // todo confirm fediact follow no-conflict
+
+// todo store following count in cache, if it changes, update following list
+//      if do this, occasionally check for new follows regardless of number of follows
+//      in case of unfollow + follow in quick succession equals same number of follows

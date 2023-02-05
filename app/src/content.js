@@ -70,7 +70,7 @@ async function sendMessage (message, timestamp) {
   if (cache?.['ports']?.['onLoad']?.isDisconnected) {
     log('port disconnected. not sending message', message)
     Promise.resolve()
-    return
+    return null
   }
 
   if (Array.isArray(message)) {
@@ -446,7 +446,7 @@ function onConnect (port) {
         message,
         this: this
       })
-      handleMessage(message)
+      handleMessage(message) // todo: may need to set port name
     })
   }
 
@@ -487,12 +487,16 @@ async function onLoadHandler (input) {
   await sendMessage(
     { type: 'onLoad' },
     getCallbackTimestamp('onLoad', onLoadResult)
-  )
+  ) // something may need to ref window.location.href to ensure calllback is for the right page
 }
 
 function onLoad () {
   log('onLoad', window.location.href)
   try {
+    // todo resolve this
+    // port needs to work, have a name
+    // 'onLoad' may need to change to 'onLoad' + window.location.href
+    // or something
     // chrome.runtime.connect(null, { name: 'onLoad' })
     chrome.runtime.sendMessage({ type: 'onLoad' })
   } catch (e) {
